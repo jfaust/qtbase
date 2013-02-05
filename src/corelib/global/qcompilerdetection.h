@@ -546,7 +546,7 @@
 #    if __has_feature(cxx_inheriting_constructors)
 #      define Q_COMPILER_INHERITING_CONSTRUCTORS
 #    endif
-#    if __has_feature(cxx_generalized_initializers)
+#    if __has_feature(cxx_generalized_initializers) && defined(_LIBCPP_VERSION) // libstdc++ 4.2 does not have initalizer_list
 #      define Q_COMPILER_INITIALIZER_LISTS
 #    endif
 #    if __has_feature(cxx_lambdas)
