@@ -153,8 +153,9 @@ bool QApplicationPrivate::autoSipEnabled = false;
 bool QApplicationPrivate::autoSipEnabled = true;
 #endif
 
-QApplicationPrivate::QApplicationPrivate(int &argc, char **argv, int flags)
+QApplicationPrivate::QApplicationPrivate(int &argc, char **argv, int flags, bool showDockIcon)
     : QApplicationPrivateBase(argc, argv, flags)
+    , showDockIcon(showDockIcon)
 {
     application_type = QApplicationPrivate::Gui;
 
@@ -536,6 +537,12 @@ QApplication::QApplication(int &argc, char **argv, int _internal)
 #endif
     : QGuiApplication(*new QApplicationPrivate(argc, argv, _internal))
 { Q_D(QApplication); d->construct(); }
+
+#if defined(Q_OS_MAC) && !defined(Q_QDOC)
+QApplication::QApplication(bool showDockIcon, int &argc, char **argv, int _internal)
+    : QGuiApplication(*new QApplicationPrivate(argc, argv, _internal, showDockIcon))
+{ Q_D(QApplication); d->construct(); }
+#endif
 
 /*!
     \internal

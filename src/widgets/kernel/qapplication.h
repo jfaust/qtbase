@@ -101,6 +101,12 @@ public:
     QApplication(int &argc, char **argv);
 #else
     QApplication(int &argc, char **argv, int = ApplicationFlags);
+
+#ifdef Q_OS_MAC
+    // Qt default behavior is to show the dock icon unless it's a Tty application
+    // We want to be able to **not** show the dock icon for a GUI application
+    QApplication(bool showDockIcon, int &argc, char **argv, int = ApplicationFlags);
+#endif
 #endif
     virtual ~QApplication();
 

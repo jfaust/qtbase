@@ -113,7 +113,7 @@ class Q_WIDGETS_EXPORT QApplicationPrivate : public QApplicationPrivateBase
 {
     Q_DECLARE_PUBLIC(QApplication)
 public:
-    QApplicationPrivate(int &argc, char **argv, int flags);
+    QApplicationPrivate(int &argc, char **argv, int flags, bool showDockIcon = true);
     ~QApplicationPrivate();
 
     virtual void notifyLayoutDirectionChange();
@@ -290,6 +290,8 @@ public:
     static void translateTouchCancel(QTouchDevice *device, ulong timestamp);
 
     QPixmap applyQIconStyleHelper(QIcon::Mode mode, const QPixmap& base) const;
+
+    bool showDockIcon;
 private:
     static QApplicationPrivate *self;
 

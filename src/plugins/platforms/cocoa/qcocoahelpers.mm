@@ -47,6 +47,7 @@
 #include <QtGui>
 #include <qpa/qplatformscreen.h>
 #include <private/qguiapplication_p.h>
+#include <private/qapplication_p.h>
 
 #ifndef QT_NO_WIDGETS
 #include <QtWidgets/QWidget>
@@ -437,7 +438,14 @@ void qt_mac_transformProccessToForegroundApplication()
             }
         }
 
-        if (forceTransform) {
+        if (!QApplicationPrivate::instance()->showDockIcon)
+        {
+#if (MAC_OS_X_VERSION_MIN_REQUIRED > MAC_OS_X_VERSION_10_6)
+            TransformProcessType(&psn, kProcessTransformToUIElementApplication);
+#endif
+        }
+        else if (forceTransform) 
+        {
             TransformProcessType(&psn, kProcessTransformToForegroundApplication);
         }
     }
