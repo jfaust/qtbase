@@ -699,9 +699,9 @@ static QTouchDevice *touchDevice = 0;
     }
 #endif
 
-
+    QPoint qt_windowPoint, qt_screenPoint;
+    [self convertFromEvent:theEvent toWindowPoint:&qt_windowPoint andScreenPoint:&qt_screenPoint];
     NSPoint windowPoint = [self convertPoint: [theEvent locationInWindow] fromView: nil];
-    QPoint qt_windowPoint(windowPoint.x, windowPoint.y);
     NSTimeInterval timestamp = [theEvent timestamp];
     ulong qt_timestamp = timestamp * 1000;
 
@@ -719,7 +719,7 @@ static QTouchDevice *touchDevice = 0;
             currentWheelModifiers = [self convertKeyModifiers:[theEvent modifierFlags]];
         }
 
-        QWindowSystemInterface::handleWheelEvent(m_window, qt_timestamp, qt_windowPoint, qt_windowPoint, pixelDelta, angleDelta, currentWheelModifiers);
+        QWindowSystemInterface::handleWheelEvent(m_window, qt_timestamp, qt_windowPoint, qt_screenPoint, pixelDelta, angleDelta, currentWheelModifiers);
 
         if (phase == NSEventPhaseEnded || phase == NSEventPhaseCancelled) {
             currentWheelModifiers = Qt::NoModifier;
@@ -727,7 +727,7 @@ static QTouchDevice *touchDevice = 0;
     } else
 #endif
     {
-        QWindowSystemInterface::handleWheelEvent(m_window, qt_timestamp, qt_windowPoint, qt_windowPoint, pixelDelta, angleDelta,
+        QWindowSystemInterface::handleWheelEvent(m_window, qt_timestamp, qt_windowPoint, qt_screenPoint, pixelDelta, angleDelta,
                                                  [self convertKeyModifiers:[theEvent modifierFlags]]);
     }
 }
