@@ -438,7 +438,7 @@ void qt_mac_transformProccessToForegroundApplication()
             }
         }
 
-        if (!QApplicationPrivate::instance()->showDockIcon)
+        if (QApplicationPrivate::instance() && !QApplicationPrivate::instance()->showDockIcon)
         {
 #if (MAC_OS_X_VERSION_MIN_REQUIRED > MAC_OS_X_VERSION_10_6)
             TransformProcessType(&psn, kProcessTransformToUIElementApplication);
