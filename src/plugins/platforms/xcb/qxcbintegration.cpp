@@ -84,7 +84,9 @@
 #include <QtGui/QScreen>
 #ifndef QT_NO_ACCESSIBILITY
 #include <qpa/qplatformaccessibility.h>
+#ifndef QT_NO_ACCESSIBILITY_ATSPI_BRIDGE
 #include "../../../platformsupport/linuxaccessibility/bridge_p.h"
+#endif
 #endif
 
 QT_BEGIN_NAMESPACE
@@ -112,16 +114,13 @@ QXcbIntegration::QXcbIntegration(const QStringList &parameters)
 
     m_fontDatabase.reset(new QGenericUnixFontDatabase());
     m_inputContext.reset(QPlatformInputContextFactory::create());
-#ifndef QT_NO_ACCESSIBILITY
+#if !defined(QT_NO_ACCESSIBILITY) && !defined(QT_NO_ACCESSIBILITY_ATSPI_BRIDGE)
     m_accessibility.reset(new QSpiAccessibleBridge());
 #endif
 }
 
 QXcbIntegration::~QXcbIntegration()
 {
-#if !defined(QT_NO_OPENGL) && defined(XCB_USE_GLX)
-    qDeleteAll(m_defaultContextInfos);
-#endif
     qDeleteAll(m_connections);
 }
 
@@ -179,14 +178,7 @@ QPlatformOpenGLContext *QXcbIntegration::createPlatformOpenGLContext(QOpenGLCont
 {
     QXcbScreen *screen = static_cast<QXcbScreen *>(context->screen()->handle());
 #if defined(XCB_USE_GLX)
-    QOpenGLDefaultContextInfo *defaultContextInfo;
-    if (m_defaultContextInfos.contains(screen)) {
-        defaultContextInfo = m_defaultContextInfos.value(screen);
-    } else {
-        defaultContextInfo = QOpenGLDefaultContextInfo::create(screen);
-        m_defaultContextInfos.insert(screen, defaultContextInfo);
-    }
-    return new QGLXContext(screen, context->format(), context->shareHandle(), defaultContextInfo);
+    return new QGLXContext(screen, context->format(), context->shareHandle());
 #elif defined(XCB_USE_EGL)
     return new QEGLXcbPlatformContext(context->format(), context->shareHandle(),
         screen->connection()->egl_display(), screen->connection());
@@ -289,23 +281,6 @@ QStringList QXcbIntegration::themeNames() const
 QPlatformTheme *QXcbIntegration::createPlatformTheme(const QString &name) const
 {
     return QGenericUnixTheme::createUnixTheme(name);
-}
-
-/*!
-  Called by QXcbConnection prior to a QQnxScreen being deleted.
-
-  Destroys and cleans up any default OpenGL context info for this screen.
-*/
-void QXcbIntegration::removeDefaultOpenGLContextInfo(QXcbScreen *screen)
-{
-#if !defined(QT_NO_OPENGL) && defined(XCB_USE_GLX)
-    if (!m_defaultContextInfos.contains(screen))
-        return;
-    QOpenGLDefaultContextInfo* info = m_defaultContextInfos.take(screen);
-    delete info;
-#else
-    Q_UNUSED(screen);
-#endif
 }
 
 QT_END_NAMESPACE

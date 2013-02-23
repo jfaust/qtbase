@@ -2707,15 +2707,15 @@ int QMacStyle::styleHint(StyleHint sh, const QStyleOption *opt, const QWidget *w
         ret = false;
         break;
     case SH_ScrollBar_Transient:
-        if (!qobject_cast<const QScrollBar*>(w)) {
-            ret = false;
-            break;
-        }
-        ret = QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7;
+        if ((qobject_cast<const QScrollBar *>(w) && w->parent() &&
+                qobject_cast<QAbstractScrollArea*>(w->parent()->parent())) ||
+                (opt && QStyleHelper::hasAncestor(opt->styleObject, QAccessible::ScrollBar))) {
+            ret = QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7;
 #if MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7
-    if (QSysInfo::MacintoshVersion >= QSysInfo::MV_10_7)
-        ret &= [NSScroller preferredScrollerStyle] == NSScrollerStyleOverlay;
+            if (ret)
+                ret = [NSScroller preferredScrollerStyle] == NSScrollerStyleOverlay;
 #endif
+        }
         break;
     default:
         ret = QCommonStyle::styleHint(sh, opt, w, hret);
@@ -4259,7 +4259,7 @@ void QMacStyle::drawControl(ControlElement ce, const QStyleOption *opt, QPainter
             if (isIndeterminate || tdi.value < tdi.max) {
                 if (QProgressStyleAnimation *animation = qobject_cast<QProgressStyleAnimation*>(d->animation(opt->styleObject)))
                     tdi.trackInfo.progress.phase = animation->animationStep();
-                else
+                else if (opt->styleObject)
                     d->startAnimation(new QProgressStyleAnimation(d->animateSpeed(QMacStylePrivate::AquaProgressBar), opt->styleObject));
             } else {
                 d->stopAnimation(opt->styleObject);
@@ -4565,7 +4565,7 @@ QRect QMacStyle::subElementRect(SubElement sr, const QStyleOption *opt,
         break;
     case SE_LineEditContents:
         rect = QCommonStyle::subElementRect(sr, opt, widget);
-        if(widget->parentWidget() && qobject_cast<const QComboBox*>(widget->parentWidget()))
+        if (widget && qobject_cast<const QComboBox*>(widget->parentWidget()))
             rect.adjust(-1, -2, 0, 0);
         else
             rect.adjust(-1, -1, 0, +1);

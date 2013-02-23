@@ -67,6 +67,7 @@ qtAddModules(QT_PRIVATE, LIBS_PRIVATE)
     message("Running this project against other versions of the Qt modules may crash at any arbitrary point.")
     message("This is not a bug, but a result of using Qt internals. You have been warned!")
 }
+qtAddRpathLink($$QT $$QT_PRIVATE)
 
 wince*:static:gui {
    QTLIB += qmenu_wce.res
@@ -124,7 +125,7 @@ for(QT_CURRENT_VERIFY, $$list($$QT_PLUGIN_VERIFY)) {
         }
         isEqual(QT_CURRENT_VERIFY, DEPLOYMENT_PLUGIN):shared:wince*: {
             QT_ITEM =
-            CONFIG(debug, debug|release): QT_ITEM = $${QTPLUG}d4.dll
+            debug: QT_ITEM = $${QTPLUG}d4.dll
             else: QT_ITEM = $${QTPLUG}4.dll
 
             eval(qt_additional_plugin_$${QTPLUG}.files = $$[QT_INSTALL_PLUGINS/get]/$${QT_PLUGINPATH}/$${QT_ITEM})

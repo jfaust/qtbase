@@ -1653,6 +1653,14 @@ void tst_QLocale::ampm()
     QLocale tr("tr_TR");
     QCOMPARE(tr.amText(), QString::fromUtf8("\303\226\303\226"));
     QCOMPARE(tr.pmText(), QString::fromUtf8("\303\226\123"));
+
+    QLocale id("id_ID");
+    QCOMPARE(id.amText(), QLatin1String("AM"));
+    QCOMPARE(id.pmText(), QLatin1String("PM"));
+
+    QLocale ta("ta_LK");
+    QCOMPARE(ta.amText(), QLatin1String("AM"));
+    QCOMPARE(ta.pmText(), QLatin1String("PM"));
 }
 
 void tst_QLocale::dateFormat()
@@ -1669,6 +1677,9 @@ void tst_QLocale::dateFormat()
     const QLocale ca("en_CA");
     QCOMPARE(ca.dateFormat(QLocale::ShortFormat), QLatin1String("M/d/yy"));
     QCOMPARE(ca.dateFormat(QLocale::LongFormat), QLatin1String("dddd, MMMM d, yyyy"));
+
+    const QLocale ja("ja_JP");
+    QCOMPARE(ja.dateFormat(QLocale::ShortFormat), QLatin1String("yyyy/MM/dd"));
 }
 
 void tst_QLocale::timeFormat()
@@ -1681,6 +1692,14 @@ void tst_QLocale::timeFormat()
     QCOMPARE(no.timeFormat(QLocale::NarrowFormat), QLatin1String("HH:mm"));
     QCOMPARE(no.timeFormat(QLocale::ShortFormat), QLatin1String("HH:mm"));
     QCOMPARE(no.timeFormat(QLocale::LongFormat), QLatin1String("'kl'. HH:mm:ss t"));
+
+    const QLocale id("id_ID");
+    QCOMPARE(id.timeFormat(QLocale::ShortFormat), QLatin1String("HH.mm"));
+    QCOMPARE(id.timeFormat(QLocale::LongFormat), QLatin1String("HH.mm.ss t"));
+
+    const QLocale cat("ca_ES");
+    QCOMPARE(cat.timeFormat(QLocale::ShortFormat), QLatin1String("H.mm"));
+    QCOMPARE(cat.timeFormat(QLocale::LongFormat), QLatin1String("H.mm.ss t"));
 }
 
 void tst_QLocale::dateTimeFormat()
@@ -1727,6 +1746,10 @@ void tst_QLocale::monthName()
     QLocale ir("ga_IE");
     QCOMPARE(ir.monthName(1, QLocale::ShortFormat), QLatin1String("Ean"));
     QCOMPARE(ir.monthName(12, QLocale::ShortFormat), QLatin1String("Noll"));
+
+    QLocale cz("cs_CZ");
+    QCOMPARE(cz.monthName(1, QLocale::ShortFormat), QLatin1String("led"));
+    QCOMPARE(cz.monthName(12, QLocale::ShortFormat), QLatin1String("pro"));
 }
 
 void tst_QLocale::standaloneMonthName()

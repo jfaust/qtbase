@@ -403,6 +403,9 @@ QXcbWindow::~QXcbWindow()
 
 void QXcbWindow::destroy()
 {
+    if (connection()->focusWindow() == this)
+        connection()->setFocusWindow(0);
+
     if (m_syncCounter && m_screen->syncRequestSupported())
         Q_XCB_CALL(xcb_sync_destroy_counter(xcb_connection(), m_syncCounter));
     if (m_window) {
@@ -1122,18 +1125,8 @@ void QXcbWindow::setParent(const QPlatformWindow *parent)
 
 void QXcbWindow::setWindowTitle(const QString &title)
 {
-    QString fullTitle = title;
-    if (QGuiApplicationPrivate::displayName) {
-        // Append display name, if set.
-        if (!fullTitle.isEmpty())
-            fullTitle += QString::fromUtf8(" \xe2\x80\x94 "); // unicode character U+2014, EM DASH
-        fullTitle += *QGuiApplicationPrivate::displayName;
-    } else if (fullTitle.isEmpty()) {
-        // Don't let the window title be completely empty, use the app name as fallback.
-        fullTitle = QCoreApplication::applicationName();
-    }
+    const QString fullTitle = formatWindowTitle(title, QString::fromUtf8(" \xe2\x80\x94 ")); // unicode character U+2014, EM DASH
     const QByteArray ba = fullTitle.toUtf8();
-
     Q_XCB_CALL(xcb_change_property(xcb_connection(),
                                    XCB_PROP_MODE_REPLACE,
                                    m_window,
@@ -1483,6 +1476,11 @@ void QXcbWindow::handleUnmapNotifyEvent(const xcb_unmap_notify_event_t *event)
 
 void QXcbWindow::handleButtonPressEvent(const xcb_button_press_event_t *event)
 {
+    if (window() != QGuiApplication::focusWindow()) {
+        QWindow *w = static_cast<QWindowPrivate *>(QObjectPrivate::get(window()))->eventReceiver();
+        w->requestActivate();
+    }
+
     updateNetWmUserTime(event->time);
 
     QPoint local(event->event_x, event->event_y);
@@ -1645,7 +1643,10 @@ void QXcbWindow::handlePropertyNotifyEvent(const xcb_property_notify_event_t *ev
 
 void QXcbWindow::handleFocusInEvent(const xcb_focus_in_event_t *)
 {
-    QWindowSystemInterface::handleWindowActivated(window());
+    QWindow *w = window();
+    w = static_cast<QWindowPrivate *>(QObjectPrivate::get(w))->eventReceiver();
+    connection()->setFocusWindow(static_cast<QXcbWindow *>(w->handle()));
+    QWindowSystemInterface::handleWindowActivated(w);
 }
 
 static bool focusInPeeker(xcb_generic_event_t *event)
@@ -1661,6 +1662,7 @@ static bool focusInPeeker(xcb_generic_event_t *event)
 
 void QXcbWindow::handleFocusOutEvent(const xcb_focus_out_event_t *)
 {
+    connection()->setFocusWindow(0);
     // Do not set the active window to 0 if there is a FocusIn coming.
     // There is however no equivalent for XPutBackEvent so register a
     // callback for QXcbConnection instead.

@@ -442,8 +442,7 @@ void Configure::parseCmdLine()
             if (j == argCount)
                 break;
             dictionary["XQMAKESPEC"] = configCmdLine.at(j);
-            if (!dictionary[ "XQMAKESPEC" ].isEmpty())
-                applySpecSpecifics();
+            applySpecSpecifics();
             break;
         }
     }
@@ -1012,6 +1011,20 @@ void Configure::parseCmdLine()
             nobuildParts.append(configCmdLine.at(i));
         }
 
+        else if (configCmdLine.at(i) == "-skip") {
+            ++i;
+            if (i == argCount)
+                break;
+            QString mod = configCmdLine.at(i);
+            if (!mod.startsWith(QStringLiteral("qt")))
+                mod.insert(0, QStringLiteral("qt"));
+            if (!QFileInfo(sourcePath + "/../" + mod).isDir()) {
+                cout << "Attempting to skip non-existent module " << mod << "." << endl;
+                dictionary["DONE"] = "error";
+            }
+            skipModules += mod;
+        }
+
         // Directories ----------------------------------------------
         else if (configCmdLine.at(i) == "-prefix") {
             ++i;
@@ -1529,12 +1542,12 @@ void Configure::desc(const char *mark_option, const char *mark, const char *opti
 */
 void Configure::applySpecSpecifics()
 {
-    if (!dictionary[ "XQMAKESPEC" ].isEmpty()) {
+    if (dictionary.contains("XQMAKESPEC")) {
         //Disable building tools, docs and translations when cross compiling.
         nobuildParts << "docs" << "translations" << "tools";
     }
 
-    if (dictionary[ "XQMAKESPEC" ].startsWith("wince")) {
+    if (dictionary.value("XQMAKESPEC").startsWith("wince")) {
         dictionary[ "STYLE_WINDOWSXP" ]     = "no";
         dictionary[ "STYLE_WINDOWSVISTA" ]  = "no";
         dictionary[ "STYLE_FUSION" ]        = "no";
@@ -1559,7 +1572,7 @@ void Configure::applySpecSpecifics()
             dictionary[ "MMX" ]    = "yes";
             dictionary[ "IWMMXT" ] = "yes";
         }
-    } else if (dictionary[ "XQMAKESPEC" ].startsWith("linux")) { //TODO actually wrong.
+    } else if (dictionary.value("XQMAKESPEC").startsWith("linux")) { //TODO actually wrong.
       //TODO
         dictionary[ "STYLE_WINDOWSXP" ]     = "no";
         dictionary[ "STYLE_WINDOWSVISTA" ]  = "no";
@@ -1603,7 +1616,7 @@ bool Configure::displayHelp()
         desc(       "-libdir <dir>",                    "Libraries will be installed to <dir>\n(default PREFIX/lib)");
         desc(       "-headerdir <dir>",                 "Headers will be installed to <dir>\n(default PREFIX/include)");
         desc(       "-archdatadir <dir>",               "Architecture-dependent data used by Qt will be installed to <dir>\n(default PREFIX)");
-        desc(       "-libexecdir <dir>",                "Program executables will be installed to <dir>\n(default ARCHDATADIR/libexec)");
+        desc(       "-libexecdir <dir>",                "Program executables will be installed to <dir>\n(default ARCHDATADIR/lib)");
         desc(       "-plugindir <dir>",                 "Plugins will be installed to <dir>\n(default ARCHDATADIR/plugins)");
         desc(       "-importdir <dir>",                 "Imports for QML1 will be installed to <dir>\n(default ARCHDATADIR/imports)");
         desc(       "-qmldir <dir>",                    "Imports for QML2 will be installed to <dir>\n(default ARCHDATADIR/qml)");
@@ -1648,10 +1661,16 @@ bool Configure::displayHelp()
             desc(               "",                     qPrintable(QString("  %1").arg(defaultBuildParts.at(i))), false, ' ');
         desc(                   "-nomake <part>",       "Exclude part from the list of parts to be built.\n");
 
-        desc("WIDGETS", "no", "-no-widgets",            "Disable QtWidgets module.\n");
+        desc(                   "-skip <module>",       "Exclude an entire module from the build.\n");
 
-        desc("ACCESSIBILITY", "no",  "-no-accessibility", "Do not compile Windows Active Accessibility support.");
-        desc("ACCESSIBILITY", "yes", "-accessibility",    "Compile Windows Active Accessibility support.\n");
+        desc("WIDGETS", "no", "-no-widgets",            "Disable Qt Widgets module.\n");
+
+        desc("ACCESSIBILITY", "no", "-no-accessibility", "Disable accessibility support.\n");
+        desc(                   "",                      "Disabling accessibility is not recommended, as it will break QStyle\n"
+                                                         "and may break other internal parts of Qt.\n"
+                                                         "With this switch you create a source incompatible version of Qt,\n"
+                                                         "which is unsupported.\n");
+        desc("ACCESSIBILITY", "yes", "-accessibility",   "Enable accessibility support.\n");
 
         desc(                   "-no-sql-<driver>",     "Disable SQL <driver> entirely, by default none are turned on.");
         desc(                   "-qt-sql-<driver>",     "Enable a SQL <driver> in the Qt Library.");
@@ -1806,8 +1825,8 @@ bool Configure::displayHelp()
         desc("DBUS", "no",       "-no-dbus",            "Do not compile in D-Bus support.");
         desc("DBUS", "yes",      "-dbus",               "Compile in D-Bus support and load libdbus-1\ndynamically.");
         desc("DBUS", "linked",   "-dbus-linked",        "Compile in D-Bus support and link to libdbus-1.\n");
-        desc("AUDIO_BACKEND", "no","-no-audio-backend", "Do not compile in the platform audio backend into\nQtMultimedia.");
-        desc("AUDIO_BACKEND", "yes","-audio-backend",   "Compile in the platform audio backend into QtMultimedia.\n");
+        desc("AUDIO_BACKEND", "no","-no-audio-backend", "Do not compile in the platform audio backend into\nQt Multimedia.");
+        desc("AUDIO_BACKEND", "yes","-audio-backend",   "Compile in the platform audio backend into Qt Multimedia.\n");
         desc("QML_DEBUG", "no",    "-no-qml-debug",     "Do not build the in-process QML debugging support.");
         desc("QML_DEBUG", "yes",   "-qml-debug",        "Build the in-process QML debugging support.\n");
         desc("DIRECTWRITE", "no", "-no-directwrite", "Do not build support for DirectWrite font rendering.");
@@ -1912,7 +1931,7 @@ QString Configure::defaultTo(const QString &option)
     }
 
     // By default we do not want to compile OCI driver when compiling with
-    // MinGW, due to lack of such support from Oracle. It prob. wont work.
+    // MinGW, due to lack of such support from Oracle. It prob. won't work.
     // (Customer may force the use though)
     if (dictionary["QMAKESPEC"].endsWith("-g++")
         && option == "SQL_OCI")
@@ -2304,7 +2323,7 @@ bool Configure::verifyConfiguration()
                  << "Disabling the ANGLE backend." << endl;
             prompt = true;
         }
-        if ((dictionary["OPENGL_ES_2"] == "yes") && (dictionary.value("XQMAKESPEC").isEmpty())) {
+        if ((dictionary["OPENGL_ES_2"] == "yes") && !dictionary.contains("XQMAKESPEC")) {
             cout << endl << "WARNING: Using OpenGL ES 2.0 without ANGLE." << endl
                  << "Specify -opengl desktop to use Open GL." << endl
                  <<  "The build will most likely fail." << endl;
@@ -2775,7 +2794,10 @@ void Configure::generateCachefile()
     if (moduleFile.open(QFile::WriteOnly | QFile::Text)) { // Truncates any existing file.
         QTextStream moduleStream(&moduleFile);
 
-        moduleStream << "QT_BUILD_PARTS += " << buildParts.join(' ') << endl << endl;
+        moduleStream << "QT_BUILD_PARTS += " << buildParts.join(' ') << endl;
+        if (!skipModules.isEmpty())
+            moduleStream << "QT_SKIP_MODULES += " << skipModules.join(' ') << endl;
+        moduleStream << endl;
 
         if (dictionary["QT_EDITION"] != "QT_EDITION_OPENSOURCE")
             moduleStream << "DEFINES        *= QT_EDITION=QT_EDITION_DESKTOP" << endl;
@@ -3026,6 +3048,7 @@ void Configure::generateQConfigPri()
 
         configStream << "CONFIG+= ";
         configStream << dictionary[ "BUILD" ];
+        configStream << (dictionary[ "SHARED" ] == "no" ? " static" : " shared");
 
         if (dictionary[ "LTCG" ] == "yes")
             configStream << " ltcg";
@@ -3052,7 +3075,7 @@ void Configure::generateQConfigPri()
         configStream << "QT_HOST_ARCH = " << dictionary["QT_HOST_ARCH"] << endl;
         configStream << "QT_CPU_FEATURES = " << dictionary["QT_CPU_FEATURES"] << endl;
         configStream << "QT_HOST_CPU_FEATURES = " << dictionary["QT_HOST_CPU_FEATURES"] << endl;
-        if (!dictionary["XQMAKESPEC"].isEmpty() && !dictionary["XQMAKESPEC"].startsWith("wince")) {
+        if (dictionary.contains("XQMAKESPEC") && !dictionary["XQMAKESPEC"].startsWith("wince")) {
             // FIXME: add detection
             configStream << "QMAKE_DEFAULT_LIBDIRS = /lib /usr/lib" << endl;
             configStream << "QMAKE_DEFAULT_INCDIRS = /usr/include /usr/local/include" << endl;
@@ -3313,18 +3336,18 @@ void Configure::displayConfig()
 
     // Give some feedback
     sout << "Environment:" << endl;
-    QString env = QString::fromLocal8Bit(getenv("INCLUDE")).replace(QRegExp("[;,]"), "\r\n      ");
+    QString env = QString::fromLocal8Bit(getenv("INCLUDE")).replace(QRegExp("[;,]"), "\n      ");
     if (env.isEmpty())
         env = "Unset";
-    sout << "    INCLUDE=\r\n      " << env << endl;
-    env = QString::fromLocal8Bit(getenv("LIB")).replace(QRegExp("[;,]"), "\r\n      ");
+    sout << "    INCLUDE=\n      " << env << endl;
+    env = QString::fromLocal8Bit(getenv("LIB")).replace(QRegExp("[;,]"), "\n      ");
     if (env.isEmpty())
         env = "Unset";
-    sout << "    LIB=\r\n      " << env << endl;
-    env = QString::fromLocal8Bit(getenv("PATH")).replace(QRegExp("[;,]"), "\r\n      ");
+    sout << "    LIB=\n      " << env << endl;
+    env = QString::fromLocal8Bit(getenv("PATH")).replace(QRegExp("[;,]"), "\n      ");
     if (env.isEmpty())
         env = "Unset";
-    sout << "    PATH=\r\n      " << env << endl;
+    sout << "    PATH=\n      " << env << endl;
 
     if (dictionary[QStringLiteral("EDITION")] != QStringLiteral("OpenSource")) {
         QString l1 = licenseInfo[ "LICENSEE" ];
@@ -3338,9 +3361,9 @@ void Configure::displayConfig()
     }
 
     sout << "Configuration:" << endl;
-    sout << "    " << qmakeConfig.join("\r\n    ") << endl;
+    sout << "    " << qmakeConfig.join("\n    ") << endl;
     sout << "Qt Configuration:" << endl;
-    sout << "    " << qtConfig.join("\r\n    ") << endl;
+    sout << "    " << qtConfig.join("\n    ") << endl;
     sout << endl;
 
     if (dictionary.contains("XQMAKESPEC"))
@@ -3382,8 +3405,8 @@ void Configure::displayConfig()
     sout << "CUPS support................" << dictionary[ "QT_CUPS" ] << endl;
     sout << "OpenVG support.............." << dictionary[ "OPENVG" ] << endl;
     sout << "OpenSSL support............." << dictionary[ "OPENSSL" ] << endl;
-    sout << "QtDBus support.............." << dictionary[ "DBUS" ] << endl;
-    sout << "QtWidgets module support...." << dictionary[ "WIDGETS" ] << endl;
+    sout << "Qt D-Bus support............" << dictionary[ "DBUS" ] << endl;
+    sout << "Qt Widgets module support..." << dictionary[ "WIDGETS" ] << endl;
     sout << "QML debugging..............." << dictionary[ "QML_DEBUG" ] << endl;
     sout << "DirectWrite support........." << dictionary[ "DIRECTWRITE" ] << endl;
     sout << "Use system proxies.........." << dictionary[ "SYSTEM_PROXIES" ] << endl << endl;
@@ -3426,7 +3449,7 @@ void Configure::displayConfig()
     sout << "Libraries installed to......" << QDir::toNativeSeparators(dictionary["QT_INSTALL_LIBS"]) << endl;
     sout << "Arch-dep. data to..........." << QDir::toNativeSeparators(dictionary["QT_INSTALL_ARCHDATA"]) << endl;
     sout << "Plugins installed to........" << QDir::toNativeSeparators(dictionary["QT_INSTALL_PLUGINS"]) << endl;
-    sout << "Library execs installed to.." << QDir::toNativeSeparators(dictionary["QT_INSTALL_LIBEXEC"]) << endl;
+    sout << "Library execs installed to.." << QDir::toNativeSeparators(dictionary["QT_INSTALL_LIBEXECS"]) << endl;
     sout << "QML1 imports installed to..." << QDir::toNativeSeparators(dictionary["QT_INSTALL_IMPORTS"]) << endl;
     sout << "QML2 imports installed to..." << QDir::toNativeSeparators(dictionary["QT_INSTALL_QML"]) << endl;
     sout << "Binaries installed to......." << QDir::toNativeSeparators(dictionary["QT_INSTALL_BINS"]) << endl;
@@ -3558,8 +3581,12 @@ void Configure::generateQConfigCpp()
         dictionary["QT_INSTALL_LIBS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/lib";
     if (!dictionary["QT_INSTALL_ARCHDATA"].size())
         dictionary["QT_INSTALL_ARCHDATA"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"];
-    if (!dictionary["QT_INSTALL_LIBEXECS"].size())
-        dictionary["QT_INSTALL_LIBEXECS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/libexec";
+    if (!dictionary["QT_INSTALL_LIBEXECS"].size()) {
+        if (dictionary["QT_INSTALL_ARCHDATA"] == dictionary["QT_INSTALL_PREFIX"])
+            dictionary["QT_INSTALL_LIBEXECS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/lib";
+        else
+            dictionary["QT_INSTALL_LIBEXECS"] = qipempty ? "" : dictionary["QT_INSTALL_ARCHDATA"] + "/libexec";
+    }
     if (!dictionary["QT_INSTALL_BINS"].size())
         dictionary["QT_INSTALL_BINS"] = qipempty ? "" : dictionary["QT_INSTALL_PREFIX"] + "/bin";
     if (!dictionary["QT_INSTALL_PLUGINS"].size())

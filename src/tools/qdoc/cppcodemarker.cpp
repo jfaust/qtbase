@@ -1165,8 +1165,8 @@ QList<Section> CppCodeMarker::qmlSections(const QmlClassNode* qmlClassNode, Syno
                     }
                     ++c;
                 }
-                if (qcn->qmlBase() != 0) {
-                    qcn = static_cast<const QmlClassNode*>(qcn->qmlBase());
+                if (qcn->qmlBaseNode() != 0) {
+                    qcn = static_cast<const QmlClassNode*>(qcn->qmlBaseNode());
                     if (!qcn->isAbstract())
                         qcn = 0;
                 }
@@ -1241,8 +1241,8 @@ QList<Section> CppCodeMarker::qmlSections(const QmlClassNode* qmlClassNode, Syno
                     }
                     ++c;
                 }
-                if (qcn->qmlBase() != 0) {
-                    qcn = static_cast<const QmlClassNode*>(qcn->qmlBase());
+                if (qcn->qmlBaseNode() != 0) {
+                    qcn = static_cast<const QmlClassNode*>(qcn->qmlBaseNode());
                     if (!qcn->isAbstract())
                         qcn = 0;
                 }
@@ -1259,7 +1259,6 @@ QList<Section> CppCodeMarker::qmlSections(const QmlClassNode* qmlClassNode, Syno
         }
         else {
             FastSection all(qmlClassNode,QString(),QString(),"member","members");
-
             const QmlClassNode* current = qmlClassNode;
             while (current != 0) {
                 NodeList::ConstIterator c = current->childNodes().constBegin();
@@ -1271,9 +1270,9 @@ QList<Section> CppCodeMarker::qmlSections(const QmlClassNode* qmlClassNode, Syno
                             if ((*p)->type() == Node::QmlProperty) {
                                 QString key = current->name() + "::" + (*p)->name();
                                 key = sortName(*p, &key);
-                                if (!all.memberMap.contains(key))
+                                if (!all.memberMap.contains(key)) {
                                     all.memberMap.insert(key,*p);
-                                //insert(all,*p,style,Okay);
+                                }
                             }
                             ++p;
                         }
@@ -1281,23 +1280,21 @@ QList<Section> CppCodeMarker::qmlSections(const QmlClassNode* qmlClassNode, Syno
                     else {
                         QString key = current->name() + "::" + (*c)->name();
                         key = sortName(*c, &key);
-                        if (!all.memberMap.contains(key))
+                        if (!all.memberMap.contains(key)) {
                             all.memberMap.insert(key,*c);
-                        //insert(all,*c,style,Okay);
+                        }
                     }
                     ++c;
                 }
-                const DocNode* dn = current->qmlBase();
-                if (dn) {
-                    if (dn->subType() == Node::QmlClass)
-                        current = static_cast<const QmlClassNode*>(dn);
-                    else {
-                        dn->doc().location().warning(tr("Base class of QML class '%1' is ambgiguous").arg(current->name()));
-                        current = 0;
-                    }
+                current = current->qmlBaseNode();
+                while (current) {
+                    if (current->isAbstract())
+                        break;
+                    if (current->isInternal())
+                        current = current->qmlBaseNode();
+                    else
+                        break;
                 }
-                else
-                    current = 0;
             }
             append(sections, all, true);
         }

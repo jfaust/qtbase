@@ -60,7 +60,9 @@
 #include <QtCore/private/qthread_p.h>
 #include <QtCore/qdir.h>
 #include <QtDebug>
+#ifndef QT_NO_ACCESSIBILITY
 #include "qaccessible.h"
+#endif
 #include <qpalette.h>
 #include <qscreen.h>
 #include "qsessionmanager.h"
@@ -220,7 +222,7 @@ static inline void clearFontUnlocked()
     For any GUI application using Qt, there is precisely \b one QGuiApplication
     object no matter whether the application has 0, 1, 2 or more windows at
     any given time. For non-GUI Qt applications, use QCoreApplication instead,
-    as it does not depend on the \l QtGui library. For QWidget based Qt applications,
+    as it does not depend on the Qt GUI module. For QWidget based Qt applications,
     use QApplication instead, as it provides some functionality needed for creating
     QWidget instances.
 
@@ -851,15 +853,6 @@ void QGuiApplicationPrivate::createPlatformIntegration()
     // Load the platform integration
     QString platformPluginPath = QLatin1String(qgetenv("QT_QPA_PLATFORM_PLUGIN_PATH"));
 
-    // On Mac, look inside the application bundle for the platform plugin.
-    // TODO (msorvig): Create proper cross-platform solution for loading
-    // deployed platform plugins
-#ifdef Q_OS_MAC
-    const QString bundlePluginPath = QCoreApplication::applicationDirPath() + QLatin1String("../Plugins/");
-    if (platformPluginPath.isEmpty() && QDir(bundlePluginPath).exists()) {
-        platformPluginPath = bundlePluginPath;
-    }
-#endif
 
     QByteArray platformName;
 #ifdef QT_QPA_DEFAULT_PLATFORM_NAME

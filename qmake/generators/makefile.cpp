@@ -3110,15 +3110,18 @@ MakefileGenerator::openOutput(QFile &file, const QString &build) const
 QString
 MakefileGenerator::pkgConfigFileName(bool fixify)
 {
-    QString ret = var("TARGET");
-    int slsh = ret.lastIndexOf(Option::dir_sep);
-    if(slsh != -1)
-        ret = ret.right(ret.length() - slsh - 1);
-    if(ret.startsWith("lib"))
-        ret = ret.mid(3);
-    int dot = ret.indexOf('.');
-    if(dot != -1)
-        ret = ret.left(dot);
+    QString ret = project->first("QMAKE_PKGCONFIG_FILE").toQString();
+    if (ret.isEmpty()) {
+        ret = project->first("TARGET").toQString();
+        int slsh = ret.lastIndexOf(Option::dir_sep);
+        if (slsh != -1)
+            ret = ret.right(ret.length() - slsh - 1);
+        if (ret.startsWith("lib"))
+            ret = ret.mid(3);
+        int dot = ret.indexOf('.');
+        if (dot != -1)
+            ret = ret.left(dot);
+    }
     ret += Option::pkgcfg_ext;
     QString subdir = project->first("QMAKE_PKGCONFIG_DESTDIR").toQString();
     if(!subdir.isEmpty()) {
@@ -3155,11 +3158,8 @@ MakefileGenerator::pkgConfigFixPath(QString path) const
 void
 MakefileGenerator::writePkgConfigFile()
 {
-    QString fname = pkgConfigFileName(), lname = fname;
+    QString fname = pkgConfigFileName();
     mkdir(fileInfo(fname).path());
-    int slsh = lname.lastIndexOf(Option::dir_sep);
-    if(slsh != -1)
-        lname = lname.right(lname.length() - slsh - 1);
     QFile ft(fname);
     if(!ft.open(QIODevice::WriteOnly))
         return;
@@ -3246,7 +3246,7 @@ MakefileGenerator::writePkgConfigFile()
         pkgConfiglibName = "-framework " + bundle + " ";
     } else {
         pkgConfiglibDir = "-L${libdir}";
-        pkgConfiglibName = "-l" + lname.left(lname.length()-Option::libtool_ext.length());
+        pkgConfiglibName = "-l" + fileInfo(fname).completeBaseName();
         if (project->isActiveConfig("shared"))
             pkgConfiglibName += project->first("TARGET_VERSION_EXT").toQString();
     }
@@ -3283,6 +3283,27 @@ MakefileGenerator::writePkgConfigFile()
     }
 
     t << endl;
+}
+
+QString MakefileGenerator::installMetaFile(const ProKey &replace_rule, const QString &src, const QString &dst)
+{
+    QString ret;
+    if (project->isEmpty(replace_rule)
+        || project->isActiveConfig("no_sed_meta_install")
+        || project->isEmpty("QMAKE_STREAM_EDITOR")) {
+        ret += "-$(INSTALL_FILE) \"" + src + "\" \"" + dst + "\"";
+    } else {
+        ret += "-$(SED)";
+        const ProStringList &replace_rules = project->values(replace_rule);
+        for (int r = 0; r < replace_rules.size(); ++r) {
+            const ProString match = project->first(ProKey(replace_rules.at(r) + ".match")),
+                        replace = project->first(ProKey(replace_rules.at(r) + ".replace"));
+            if (!match.isEmpty() /*&& match != replace*/)
+                ret += " -e \"s," + match + "," + replace + ",g\"";
+        }
+        ret += " \"" + src + "\" >\"" + dst + "\"";
+    }
+    return ret;
 }
 
 QT_END_NAMESPACE

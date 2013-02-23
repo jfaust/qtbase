@@ -173,6 +173,36 @@ static QTouchDevice *touchDevice = 0;
     QWindowSystemInterface::handleExposeEvent(m_window, m_window->geometry());
 }
 
+- (void)viewDidMoveToSuperview
+{
+    if (!(m_window->type() & Qt::SubWindow))
+        return;
+
+    if ([self superview]) {
+        m_platformWindow->m_contentViewIsEmbedded = true;
+        QWindowSystemInterface::handleGeometryChange(m_window, m_platformWindow->geometry());
+        QWindowSystemInterface::handleExposeEvent(m_window, m_platformWindow->geometry());
+        QWindowSystemInterface::flushWindowSystemEvents();
+    } else {
+        m_platformWindow->m_contentViewIsEmbedded = false;
+    }
+}
+
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow
+{
+    // ### Merge "normal" window code path with this one for 5.1.
+    if (!(m_window->type() & Qt::SubWindow))
+        return;
+
+    if (newWindow) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                              selector:@selector(windowNotification:)
+                                              name:nil // Get all notifications
+                                              object:newWindow];
+    } else {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:nil object:[self window]];
+    }
+}
 - (void)updateGeometry
 {
     QRect geometry;
@@ -181,6 +211,9 @@ static QTouchDevice *touchDevice = 0;
         NSRect rect = [self frame];
         NSRect windowRect = [[self window] frame];
         geometry = QRect(windowRect.origin.x, qt_mac_flipYCoordinate(windowRect.origin.y + rect.size.height), rect.size.width, rect.size.height);
+    } else if (m_window->type() & Qt::SubWindow) {
+        // embedded child window, use the frame rect ### merge with case below
+        geometry = qt_mac_toQRect([self bounds]);
     } else {
         // child window, use the frame rect
         geometry = qt_mac_toQRect([self frame]);
@@ -197,6 +230,12 @@ static QTouchDevice *touchDevice = 0;
     // doing that will initiate a geometry change it and possibly create
     // an infinite loop when this notification is triggered again.)
     m_platformWindow->QPlatformWindow::setGeometry(geometry);
+
+    // Don't send the geometry change if the QWindow is designated to be
+    // embedded in a foregin view hiearchy but has not actually been
+    // embedded yet - it's too early.
+    if ((m_window->type() & Qt::SubWindow) && !m_platformWindow->m_contentViewIsEmbedded)
+        return;
 
     // Send a geometry change event to Qt, if it's ready to handle events
     if (!m_platformWindow->m_inConstructor) {
@@ -317,7 +356,12 @@ static QTouchDevice *touchDevice = 0;
     );
     CGImageRef bsCGImage = m_backingStore->getBackingStoreCGImage();
     CGImageRef cleanImg = CGImageCreateWithImageInRect(bsCGImage, backingStoreRect);
+
+    // Optimization: Copy frame buffer content instead of blending for
+    // top-level windows where Qt fills the entire window content area.
+    if (m_platformWindow->m_nsWindow)
     CGContextSetBlendMode(cgContext, kCGBlendModeCopy);
+
     CGContextDrawImage(cgContext, dirtyWindowRect, cleanImg);
 
     // Clean-up:
@@ -403,14 +447,19 @@ static QTouchDevice *touchDevice = 0;
         m_buttons |= Qt::LeftButton;
         break;
     case NSLeftMouseUp:
-         m_buttons &= QFlag(~int(Qt::LeftButton));
+         m_buttons &= ~Qt::LeftButton;
          break;
     case NSRightMouseDown:
         m_buttons |= Qt::RightButton;
         break;
     case NSRightMouseUp:
-        m_buttons &= QFlag(~int(Qt::RightButton));
+        m_buttons &= ~Qt::RightButton;
         break;
+    case NSOtherMouseDown:
+        m_buttons |= cocoaButton2QtButton([theEvent buttonNumber]);
+        break;
+    case NSOtherMouseUp:
+        m_buttons &= ~cocoaButton2QtButton([theEvent buttonNumber]);
     default:
         break;
     }
@@ -465,12 +514,45 @@ static QTouchDevice *touchDevice = 0;
 - (void)mouseUp:(NSEvent *)theEvent
 {
     if (m_sendUpAsRightButton) {
-        m_buttons &= QFlag(~int(Qt::RightButton));
+        m_buttons &= ~Qt::RightButton;
         m_sendUpAsRightButton = false;
     } else {
-        m_buttons &= QFlag(~int(Qt::LeftButton));
+        m_buttons &= ~Qt::LeftButton;
     }
     [self handleMouseEvent:theEvent];
+}
+
+- (void)updateTrackingAreas
+{
+    [super updateTrackingAreas];
+
+    // [NSView addTrackingArea] is slow, so bail out early if we can:
+    if (NSIsEmptyRect([self visibleRect]))
+        return;
+
+    QCocoaAutoReleasePool pool;
+    if (NSArray *trackingArray = [self trackingAreas]) {
+        NSUInteger size = [trackingArray count];
+        for (NSUInteger i = 0; i < size; ++i) {
+            NSTrackingArea *t = [trackingArray objectAtIndex:i];
+            [self removeTrackingArea:t];
+        }
+    }
+
+    // Ideally, we shouldn't have NSTrackingMouseMoved events included below, it should
+    // only be turned on if mouseTracking, hover is on or a tool tip is set.
+    // Unfortunately, Qt will send "tooltip" events on mouse moves, so we need to
+    // turn it on in ALL case. That means EVERY QCocoaView gets to pay the cost of
+    // mouse moves delivered to it (Apple recommends keeping it OFF because there
+    // is a performance hit). So it goes.
+    NSUInteger trackingOptions = NSTrackingMouseEnteredAndExited | NSTrackingActiveInActiveApp
+                                 | NSTrackingInVisibleRect | NSTrackingMouseMoved;
+    NSTrackingArea *ta = [[[NSTrackingArea alloc] initWithRect:[self frame]
+                                                      options:trackingOptions
+                                                        owner:self
+                                                     userInfo:nil]
+                                                                autorelease];
+    [self addTrackingArea:ta];
 }
 
 - (void)mouseMoved:(NSEvent *)theEvent
@@ -506,59 +588,13 @@ static QTouchDevice *touchDevice = 0;
 
 - (void)rightMouseUp:(NSEvent *)theEvent
 {
-    m_buttons &= QFlag(~int(Qt::RightButton));
+    m_buttons &= ~Qt::RightButton;
     [self handleMouseEvent:theEvent];
 }
 
 - (void)otherMouseDown:(NSEvent *)theEvent
 {
-    switch ([theEvent buttonNumber]) {
-        case 3:
-            m_buttons |= Qt::MiddleButton;
-            break;
-        case 4:
-            m_buttons |= Qt::ExtraButton1;  // AKA Qt::BackButton
-            break;
-        case 5:
-            m_buttons |= Qt::ExtraButton2;  // AKA Qt::ForwardButton
-            break;
-        case 6:
-            m_buttons |= Qt::ExtraButton3;
-            break;
-        case 7:
-            m_buttons |= Qt::ExtraButton4;
-            break;
-        case 8:
-            m_buttons |= Qt::ExtraButton5;
-            break;
-        case 9:
-            m_buttons |= Qt::ExtraButton6;
-            break;
-        case 10:
-            m_buttons |= Qt::ExtraButton7;
-            break;
-        case 11:
-            m_buttons |= Qt::ExtraButton8;
-            break;
-        case 12:
-            m_buttons |= Qt::ExtraButton9;
-            break;
-        case 13:
-            m_buttons |= Qt::ExtraButton10;
-            break;
-        case 14:
-            m_buttons |= Qt::ExtraButton11;
-            break;
-        case 15:
-            m_buttons |= Qt::ExtraButton12;
-            break;
-        case 16:
-            m_buttons |= Qt::ExtraButton13;
-            break;
-        default:
-            m_buttons |= Qt::MiddleButton;
-            break;
-    }
+    m_buttons |= cocoaButton2QtButton([theEvent buttonNumber]);
     [self handleMouseEvent:theEvent];
 }
 
@@ -571,53 +607,7 @@ static QTouchDevice *touchDevice = 0;
 
 - (void)otherMouseUp:(NSEvent *)theEvent
 {
-    switch ([theEvent buttonNumber]) {
-        case 3:
-            m_buttons &= QFlag(~int(Qt::MiddleButton));
-            break;
-        case 4:
-            m_buttons &= QFlag(~int(Qt::ExtraButton1));  // AKA Qt::BackButton
-            break;
-        case 5:
-            m_buttons &= QFlag(~int(Qt::ExtraButton2));  // AKA Qt::ForwardButton
-            break;
-        case 6:
-            m_buttons &= QFlag(~int(Qt::ExtraButton3));
-            break;
-        case 7:
-            m_buttons &= QFlag(~int(Qt::ExtraButton4));
-            break;
-        case 8:
-            m_buttons &= QFlag(~int(Qt::ExtraButton5));
-            break;
-        case 9:
-            m_buttons &= QFlag(~int(Qt::ExtraButton6));
-            break;
-        case 10:
-            m_buttons &= QFlag(~int(Qt::ExtraButton7));
-            break;
-        case 11:
-            m_buttons &= QFlag(~int(Qt::ExtraButton8));
-            break;
-        case 12:
-            m_buttons &= QFlag(~int(Qt::ExtraButton9));
-            break;
-        case 13:
-            m_buttons &= QFlag(~int(Qt::ExtraButton10));
-            break;
-        case 14:
-            m_buttons &= QFlag(~int(Qt::ExtraButton11));
-            break;
-        case 15:
-            m_buttons &= QFlag(~int(Qt::ExtraButton12));
-            break;
-        case 16:
-            m_buttons &= QFlag(~int(Qt::ExtraButton13));
-            break;
-        default:
-            m_buttons &= QFlag(~int(Qt::MiddleButton));
-            break;
-    }
+    m_buttons &= ~cocoaButton2QtButton([theEvent buttonNumber]);
     [self handleMouseEvent:theEvent];
 }
 
@@ -701,7 +691,6 @@ static QTouchDevice *touchDevice = 0;
 
     QPoint qt_windowPoint, qt_screenPoint;
     [self convertFromEvent:theEvent toWindowPoint:&qt_windowPoint andScreenPoint:&qt_screenPoint];
-    NSPoint windowPoint = [self convertPoint: [theEvent locationInWindow] fromView: nil];
     NSTimeInterval timestamp = [theEvent timestamp];
     ulong qt_timestamp = timestamp * 1000;
 
@@ -1079,7 +1068,7 @@ static QTouchDevice *touchDevice = 0;
 
 - (NSUInteger)characterIndexForPoint:(NSPoint)aPoint
 {
-    // We dont support cursor movements using mouse while composing.
+    // We don't support cursor movements using mouse while composing.
     Q_UNUSED(aPoint);
     return NSNotFound;
 }
@@ -1209,7 +1198,7 @@ static QTouchDevice *touchDevice = 0;
 
 // keep our state, and QGuiApplication state (buttons member) in-sync,
 // or future mouse events will be processed incorrectly
-    m_buttons &= QFlag(~int(Qt::LeftButton));
+    m_buttons &= ~Qt::LeftButton;
 
     NSPoint windowPoint = [self convertPoint: point fromView: nil];
     QPoint qtWindowPoint(windowPoint.x, windowPoint.y);
