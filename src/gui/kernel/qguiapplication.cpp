@@ -1661,6 +1661,9 @@ void QGuiApplicationPrivate::processCloseEvent(QWindowSystemInterfacePrivate::Cl
 
     QCloseEvent event;
     QGuiApplication::sendSpontaneousEvent(e->window.data(), &event);
+    if (e->accepted) {
+        *(e->accepted) = !event.isAccepted();
+    }
 }
 
 void QGuiApplicationPrivate::processFileOpenEvent(QWindowSystemInterfacePrivate::FileOpenEvent *e)

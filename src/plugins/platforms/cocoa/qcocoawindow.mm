@@ -601,10 +601,13 @@ void QCocoaWindow::windowDidResize()
     [m_contentView updateGeometry];
 }
 
-void QCocoaWindow::windowWillClose()
+bool QCocoaWindow::windowShouldClose()
 {
-    QWindowSystemInterface::handleCloseEvent(window());
+    bool accepted = false;
+    QWindowSystemInterface::handleCloseEvent(window(), &accepted);
     QWindowSystemInterface::flushWindowSystemEvents();
+    
+    return accepted;
 }
 
 bool QCocoaWindow::windowIsPopupType(Qt::WindowType type) const

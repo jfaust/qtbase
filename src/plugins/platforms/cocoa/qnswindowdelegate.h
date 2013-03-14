@@ -51,10 +51,10 @@
 //- (NSSize)windowWillResize:(NSWindow *)window toSize:(NSSize)proposedFrameSize;
 //- (void)windowDidMiniaturize:(NSNotification*)notification;
 - (void)windowDidResize:(NSNotification *)notification;
-- (void)windowWillClose:(NSNotification *)notification;
+//- (void)windowWillClose:(NSNotification *)notification;
 //- (NSRect)windowWillUseStandardFrame:(NSWindow *)window defaultFrame:(NSRect)defaultFrame;
 - (void)windowDidMove:(NSNotification *)notification;
-//- (BOOL)windowShouldClose:(id)window;
+- (BOOL)windowShouldClose:(NSNotification *)notification;
 //- (void)windowDidDeminiaturize:(NSNotification *)notification;
 //- (void)windowDidBecomeMain:(NSNotification*)notification;
 //- (void)windowDidResignMain:(NSNotification*)notification;
@@ -76,6 +76,7 @@
 - (void)windowDidResize:(NSNotification *)notification;
 - (void)windowDidMove:(NSNotification *)notification;
 - (void)windowWillClose:(NSNotification *)notification;
+- (BOOL)windowShouldClose:(NSNotification *)notification;
 
 @end
 
