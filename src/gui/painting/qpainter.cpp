@@ -231,7 +231,10 @@ QTransform QPainterPrivate::hidpiScaleTransform() const
     // Limited feature introduction for Qt 5.0.0, remove ifdef in a later release.
     if (device->devType() == QInternal::Printer || device->physicalDpiX() == 0 || device->logicalDpiX() == 0)
         return QTransform();
-    const qreal deviceScale = (device->physicalDpiX() / device->logicalDpiX());
+    // FIXME jfaust: this is not the right solution, but QPaintDevice does not have a devicePixelRatio function
+    // logicalDpiX() returns the incorrect value on a Retina Macbook Pro if the resolution is set as high
+    // as it will go ("More Space")
+    const qreal deviceScale = qGuiApp->devicePixelRatio();//(device->physicalDpiX() / device->logicalDpiX());
     if (deviceScale > 1.0)
         return QTransform::fromScale(deviceScale, deviceScale);
 #endif
