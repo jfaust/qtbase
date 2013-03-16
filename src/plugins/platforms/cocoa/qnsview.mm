@@ -86,6 +86,7 @@ static QTouchDevice *touchDevice = 0;
         m_subscribesForGlobalFrameNotifications = false;
         currentCustomDragTypes = 0;
         m_sendUpAsRightButton = false;
+        m_mouseInView = false;
 
         if (!touchDevice) {
             touchDevice = new QTouchDevice;
@@ -231,6 +232,10 @@ static QTouchDevice *touchDevice = 0;
     // an infinite loop when this notification is triggered again.)
     m_platformWindow->QPlatformWindow::setGeometry(geometry);
 
+    // mouseEntered does not get called if the mouse enters the window due to the window
+    // resizing itself programmatically or through being maximized
+    [self checkIfMouseIsInView];
+
     // Don't send the geometry change if the QWindow is designated to be
     // embedded in a foregin view hiearchy but has not actually been
     // embedded yet - it's too early.
@@ -252,6 +257,10 @@ static QTouchDevice *touchDevice = 0;
     if (notificationName == NSWindowDidBecomeKeyNotification) {
         if (!m_platformWindow->windowIsPopupType())
             QWindowSystemInterface::handleWindowActivated(m_window);
+
+        // When this window becomes the key window, the mouse may already be inside it,
+        // in which case mouseEntered will not be called
+        [self checkIfMouseIsInView];
     } else if (notificationName == NSWindowDidResignKeyNotification) {
         // key window will be non-nil if another window became key... do not
         // set the active window to zero here, the new key window's
@@ -555,13 +564,29 @@ static QTouchDevice *touchDevice = 0;
     [self addTrackingArea:ta];
 }
 
+- (void)checkIfMouseIsInView
+{
+    NSPoint windowPoint = [[self window] mouseLocationOutsideOfEventStream];
+    NSView *candidateView = [[[self window] contentView] hitTest:windowPoint];
+    m_mouseInView = (candidateView == self);    
+}
+
 - (void)mouseMoved:(NSEvent *)theEvent
 {
-    [self handleMouseEvent:theEvent];
+    // Because we are using NSTrackingActiveInActiveApp, NSTrackingArea fires move events 
+    // even when there is a window from our application covering this view.
+    // The order of the events we receive (the background window receives the move event 
+    // first) means that the bottom window gets the event first, confusing Qt
+    if (m_mouseInView)
+    {
+        [self handleMouseEvent:theEvent];    
+    }
 }
 
 - (void)mouseEntered:(NSEvent *)theEvent
 {
+    m_mouseInView = true;
+
     QPoint windowPoint, screenPoint;
     [self convertFromEvent:theEvent toWindowPoint:&windowPoint andScreenPoint:&screenPoint];
     QWindowSystemInterface::handleEnterEvent(m_window, windowPoint, screenPoint);
@@ -569,6 +594,8 @@ static QTouchDevice *touchDevice = 0;
 
 - (void)mouseExited:(NSEvent *)theEvent
 {
+    m_mouseInView = false;
+
     Q_UNUSED(theEvent);
     QWindowSystemInterface::handleLeaveEvent(m_window);
 }
