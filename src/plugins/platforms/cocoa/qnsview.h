@@ -70,7 +70,6 @@ QT_END_NAMESPACE
     bool m_sendUpAsRightButton;
     Qt::KeyboardModifiers currentWheelModifiers;
     bool m_subscribesForGlobalFrameNotifications;
-    bool m_mouseInView;
 }
 
 - (id)init;
@@ -107,7 +106,6 @@ QT_END_NAMESPACE
 - (void)otherMouseDragged:(NSEvent *)theEvent;
 - (void)otherMouseUp:(NSEvent *)theEvent;
 - (void)handleFrameStrutMouseEvent:(NSEvent *)theEvent;
-- (void)checkIfMouseIsInView;
 
 - (int) convertKeyCode : (QChar)keyCode;
 - (Qt::KeyboardModifiers) convertKeyModifiers : (ulong)modifierFlags;
