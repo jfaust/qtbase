@@ -92,18 +92,8 @@ bool MakefileGenerator::canExecute(const QStringList &cmdline, int *a) const
 
 QString MakefileGenerator::mkdir_p_asstring(const QString &dir, bool escape) const
 {
-    QString ret =  "@" + chkdir + " ";
-    if(escape)
-        ret += escapeFilePath(dir);
-    else
-        ret += dir;
-    ret += " " + chkglue + "$(MKDIR) ";
-    if(escape)
-        ret += escapeFilePath(dir);
-    else
-        ret += dir;
-    ret += " ";
-    return ret;
+    QString edir = escape ? escapeFilePath(dir) : dir;
+    return "@" + makedir.arg(edir);
 }
 
 bool MakefileGenerator::mkdir(const QString &in_path) const
@@ -305,8 +295,8 @@ MakefileGenerator::setProjectFile(QMakeProject *p)
     project = p;
     if (project->isActiveConfig("win32"))
         target_mode = TARG_WIN_MODE;
-    else if (project->isActiveConfig("macx"))
-        target_mode = TARG_MACX_MODE;
+    else if (project->isActiveConfig("mac"))
+        target_mode = TARG_MAC_MODE;
     else
         target_mode = TARG_UNIX_MODE;
     init();
@@ -440,13 +430,23 @@ MakefileGenerator::init()
     if (v["TARGET"].isEmpty())
         warn_msg(WarnLogic, "TARGET is empty");
 
-    chkdir = v["QMAKE_CHK_DIR_EXISTS"].join(' ');
-    chkfile = v["QMAKE_CHK_FILE_EXISTS"].join(' ');
-    if (chkfile.isEmpty()) // Backwards compat with Qt4 specs
-        chkfile = isWindowsShell() ? "if not exist" : "test -f";
-    chkglue = v["QMAKE_CHK_EXISTS_GLUE"].join(' ');
-    if (chkglue.isEmpty()) // Backwards compat with Qt4 specs
-        chkglue = isWindowsShell() ? "" : "|| ";
+    makedir = v["QMAKE_MKDIR_CMD"].join(' ');
+    chkexists = v["QMAKE_CHK_EXISTS"].join(' ');
+    if (makedir.isEmpty()) { // Backwards compat with Qt < 5.0.2 specs
+        if (isWindowsShell()) {
+            makedir = "if not exist %1 mkdir %1 & if not exist %1 exit 1";
+            chkexists = "if not exist %1";
+        } else {
+            makedir = "test -d %1 || mkdir -p %1";
+            chkexists = "test -e %1 ||";
+        }
+    }
+
+    if (v["QMAKE_CC_O_FLAG"].isEmpty())
+        v["QMAKE_CC_O_FLAG"].append("-o ");
+
+    if (v["QMAKE_LINK_O_FLAG"].isEmpty())
+        v["QMAKE_LINK_O_FLAG"].append("-o ");
 
     ProStringList &quc = v["QMAKE_EXTRA_COMPILERS"];
 
@@ -2398,8 +2398,8 @@ MakefileGenerator::writeSubTargetCall(QTextStream &t,
     if (!in.isEmpty()) {
         if (!in_directory.isEmpty())
             t << "\n\t" << mkdir_p_asstring(out_directory);
-        pfx = "( " + chkfile + " " + out + " " + chkglue
-              + "$(QMAKE) " + in + buildArgs() + " -o " + out
+        pfx = "( " + chkexists.arg(out) +
+              + " $(QMAKE) " + in + buildArgs() + " -o " + out
               + " ) && ";
     }
     writeSubMakeCall(t, out_directory_cdin + pfx, makefilein);
@@ -3233,7 +3233,7 @@ MakefileGenerator::writePkgConfigFile()
     t << "Libs: ";
     QString pkgConfiglibDir;
     QString pkgConfiglibName;
-    if (target_mode == TARG_MACX_MODE && project->isActiveConfig("lib_bundle")) {
+    if (target_mode == TARG_MAC_MODE && project->isActiveConfig("lib_bundle")) {
         pkgConfiglibDir = "-F${libdir}";
         ProString bundle;
         if (!project->isEmpty("QMAKE_FRAMEWORK_BUNDLE_NAME"))

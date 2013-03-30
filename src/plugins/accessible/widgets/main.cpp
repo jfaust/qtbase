@@ -172,12 +172,11 @@ QAccessibleInterface *AccessibleFactory::create(const QString &classname, QObjec
         iface = new QAccessibleMenu(widget);
 #endif
 #ifndef QT_NO_ITEMVIEWS
-    } else if (classname == QLatin1String("QAbstractItemView")) {
-        if (qobject_cast<const QTreeView*>(widget)) {
-            iface = new QAccessibleTree(widget);
-        } else {
-            iface = new QAccessibleTable(widget);
-        }
+    } else if (classname == QLatin1String("QTreeView")) {
+        iface = new QAccessibleTree(widget);
+    } else if (classname == QLatin1String("QTableView") || classname == QLatin1String("QListView")) {
+        iface = new QAccessibleTable(widget);
+    // ### This should be cleaned up. We return the parent for the scrollarea to hide it.
     } else if (classname == QLatin1String("QWidget")
                && widget->objectName() == QLatin1String("qt_scrollarea_viewport")
                && qobject_cast<QAbstractItemView*>(widget->parentWidget())) {
@@ -251,7 +250,10 @@ QAccessibleInterface *AccessibleFactory::create(const QString &classname, QObjec
     } else if (classname == QLatin1String("QDockWidget")) {
         iface = new QAccessibleDockWidget(widget);
 #endif
-    } else {
+
+    } else if (classname == QLatin1String("QDesktopScreenWidget")) {
+        iface = 0;
+    } else if (classname == QLatin1String("QWidget")) {
         iface = new QAccessibleWidget(widget);
     }
 

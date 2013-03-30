@@ -88,6 +88,7 @@ QmlDocVisitor::QmlDocVisitor(const QString &filePath,
                              QSet<QString> &topics)
     : nestingLevel(0)
 {
+    lastEndOffset = 0;
     this->filePath = filePath;
     this->name = QFileInfo(filePath).baseName();
     document = code;
@@ -117,21 +118,21 @@ QQmlJS::AST::SourceLocation QmlDocVisitor::precedingComment(quint32 offset) cons
 
         QQmlJS::AST::SourceLocation loc = it.previous();
 
-        if (loc.begin() <= lastEndOffset)
+        if (loc.begin() <= lastEndOffset) {
             // Return if we reach the end of the preceding structure.
             break;
-
-        else if (usedComments.contains(loc.begin()))
+        }
+        else if (usedComments.contains(loc.begin())) {
             // Return if we encounter a previously used comment.
             break;
-
+        }
         else if (loc.begin() > lastEndOffset && loc.end() < offset) {
-
             // Only examine multiline comments in order to avoid snippet markers.
             if (document.at(loc.offset - 1) == QLatin1Char('*')) {
                 QString comment = document.mid(loc.offset, loc.length);
-                if (comment.startsWith(QLatin1Char('!')) || comment.startsWith(QLatin1Char('*')))
+                if (comment.startsWith(QLatin1Char('!')) || comment.startsWith(QLatin1Char('*'))) {
                     return loc;
+                }
             }
         }
     }
@@ -165,8 +166,9 @@ bool QmlDocVisitor::applyDocumentation(QQmlJS::AST::SourceLocation location, Nod
         node->setDoc(doc);
         applyMetacommands(loc, node, doc);
         usedComments.insert(loc.offset);
-        if (doc.isEmpty())
+        if (doc.isEmpty()) {
             return false;
+        }
         return true;
     }
     Location codeLoc(filePath);
@@ -424,8 +426,9 @@ bool QmlDocVisitor::visit(QQmlJS::AST::UiObjectDefinition *definition)
  */
 void QmlDocVisitor::endVisit(QQmlJS::AST::UiObjectDefinition *definition)
 {
-    if (nestingLevel > 0)
+    if (nestingLevel > 0) {
         --nestingLevel;
+    }
     lastEndOffset = definition->lastSourceLocation().end();
 }
 
@@ -461,6 +464,26 @@ void QmlDocVisitor::endVisit(QQmlJS::AST::UiImportList *definition)
     lastEndOffset = definition->lastSourceLocation().end();
 }
 
+bool QmlDocVisitor::visit(QQmlJS::AST::UiObjectBinding *)
+{
+    ++nestingLevel;
+    return true;
+}
+
+void QmlDocVisitor::endVisit(QQmlJS::AST::UiObjectBinding *)
+{
+    --nestingLevel;
+}
+
+bool QmlDocVisitor::visit(QQmlJS::AST::UiArrayBinding *)
+{
+    return true;
+}
+
+void QmlDocVisitor::endVisit(QQmlJS::AST::UiArrayBinding *)
+{
+}
+
 /*!
     Visits the public \a member declaration, which can be a
     signal or a property. It is a custom signal or property.
@@ -468,8 +491,9 @@ void QmlDocVisitor::endVisit(QQmlJS::AST::UiImportList *definition)
 */
 bool QmlDocVisitor::visit(QQmlJS::AST::UiPublicMember *member)
 {
-    if (nestingLevel > 1)
+    if (nestingLevel > 1) {
         return true;
+    }
     switch (member->type) {
     case QQmlJS::AST::UiPublicMember::Signal:
     {
@@ -535,8 +559,9 @@ bool QmlDocVisitor::visit(QQmlJS::AST::IdentifierPropertyName *)
  */
 bool QmlDocVisitor::visit(QQmlJS::AST::FunctionDeclaration* fd)
 {
-    if (nestingLevel > 1)
+    if (nestingLevel > 1) {
         return true;
+    }
     if (current->type() == Node::Document) {
         QmlClassNode* qmlClass = static_cast<QmlClassNode*>(current);
         if (qmlClass) {
@@ -578,11 +603,18 @@ void QmlDocVisitor::endVisit(QQmlJS::AST::FunctionDeclaration* fd)
 /*!
   Begin the visit of the signal handler declaration \a sb, but only
   if the nesting level is 1.
+
+  This visit is now deprecated. It has been decided to document
+  public signals. If a signal handler must be discussed in the
+  documentation, that discussion must take place in the comment
+  for the signal.
  */
-bool QmlDocVisitor::visit(QQmlJS::AST::UiScriptBinding* sb)
+bool QmlDocVisitor::visit(QQmlJS::AST::UiScriptBinding* )
 {
-    if (nestingLevel > 1)
+#if 0
+    if (nestingLevel > 1) {
         return true;
+    }
     if (current->type() == Node::Document) {
         QString handler = sb->qualifiedId->name.toString();
         if (handler.length() > 2 && handler.startsWith("on") && handler.at(2).isUpper()) {
@@ -593,6 +625,7 @@ bool QmlDocVisitor::visit(QQmlJS::AST::UiScriptBinding* sb)
             }
         }
     }
+#endif
     return true;
 }
 

@@ -18,9 +18,7 @@ testcocoon {
     load(testcocoon)
 }
 
-mac {
-    LIBS_PRIVATE += -framework Cocoa
-}
+mac:!ios: LIBS_PRIVATE += -framework Cocoa
 
 CONFIG += simd
 
@@ -37,3 +35,4 @@ include(itemmodels/itemmodels.pri)
 
 QMAKE_LIBS += $$QMAKE_LIBS_GUI
 
+QMAKE_DYNAMIC_LIST_FILE = $$PWD/QtGui.dynlist

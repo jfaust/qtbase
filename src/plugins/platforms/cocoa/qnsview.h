@@ -59,6 +59,7 @@ QT_END_NAMESPACE
     QPoint m_backingStoreOffset;
     CGImageRef m_maskImage;
     uchar *m_maskData;
+    bool m_shouldInvalidateWindowShadow;
     QWindow *m_window;
     QCocoaWindow *m_platformWindow;
     Qt::MouseButtons m_buttons;
@@ -77,12 +78,20 @@ QT_END_NAMESPACE
 - (void)setQCocoaGLContext:(QCocoaGLContext *)context;
 - (void)flushBackingStore:(QCocoaBackingStore *)backingStore region:(const QRegion &)region offset:(QPoint)offset;
 - (void)setMaskRegion:(const QRegion *)region;
+- (void)invalidateWindowShadowIfNeeded;
 - (void)drawRect:(NSRect)dirtyRect;
 - (void)updateGeometry;
 - (void)windowNotification : (NSNotification *) windowNotification;
+- (void)viewDidHide;
+- (void)viewDidUnhide;
 
 - (BOOL)isFlipped;
 - (BOOL)acceptsFirstResponder;
+- (BOOL)becomeFirstResponder;
+- (BOOL)hasMask;
+- (BOOL)isOpaque;
+
+- (void)resetMouseButtons;
 
 - (void)handleMouseEvent:(NSEvent *)theEvent;
 - (void)mouseDown:(NSEvent *)theEvent;

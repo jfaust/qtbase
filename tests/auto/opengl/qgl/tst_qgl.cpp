@@ -78,7 +78,6 @@ private slots:
     void shareRegister();
     void textureCleanup();
 #endif
-    void graphicsViewClipping();
     void partialGLWidgetUpdates_data();
     void partialGLWidgetUpdates();
     void glWidgetWithAlpha();
@@ -98,6 +97,7 @@ private slots:
     void destroyFBOAfterContext();
     void threadImages();
     void nullRectCrash();
+    void graphicsViewClipping();
 };
 
 tst_QGL::tst_QGL()
@@ -832,10 +832,19 @@ static void fuzzyCompareImages(const QImage &testImage, const QImage &referenceI
 class UnclippedWidget : public QWidget
 {
 public:
+    bool painted;
+
+    UnclippedWidget()
+        : painted(false)
+    {
+    }
+
     void paintEvent(QPaintEvent *)
     {
         QPainter p(this);
         p.fillRect(rect().adjusted(-1000, -1000, 1000, 1000), Qt::black);
+
+        painted = true;
     }
 };
 
@@ -865,7 +874,9 @@ void tst_QGL::graphicsViewClipping()
 
     scene.setSceneRect(view.viewport()->rect());
 
-    QVERIFY(QTest::qWaitForWindowActive(&view));
+    QVERIFY(QTest::qWaitForWindowExposed(&view));
+
+    QTRY_VERIFY(widget->painted);
 
     QImage image = viewport->grabFrameBuffer();
     QImage expected = image;

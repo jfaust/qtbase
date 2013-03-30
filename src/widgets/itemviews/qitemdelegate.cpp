@@ -3,7 +3,7 @@
 ** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
@@ -1298,6 +1298,9 @@ QStyleOptionViewItem QItemDelegate::setOptions(const QModelIndex &index,
     value = index.data(Qt::ForegroundRole);
     if (value.canConvert<QBrush>())
         opt.palette.setBrush(QPalette::Text, qvariant_cast<QBrush>(value));
+
+    // disable style animations for checkboxes etc. within itemviews (QTBUG-30146)
+    opt.styleObject = 0;
 
     return opt;
 }

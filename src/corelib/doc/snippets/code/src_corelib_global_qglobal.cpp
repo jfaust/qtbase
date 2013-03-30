@@ -501,7 +501,7 @@ namespace QT_NAMESPACE {
 //! [43]
 class MyClass : public QObject
 {
-    
+
   private:
     Q_DISABLE_COPY(MyClass)
 };
@@ -511,7 +511,7 @@ class MyClass : public QObject
 //! [44]
 class MyClass : public QObject
 {
-    
+
   private:
      MyClass(const MyClass &);
      MyClass &operator=(const MyClass &);
@@ -598,3 +598,13 @@ bool readConfiguration(const QFile &file)
            break;
    }
 //! [qunreachable-switch]
+
+//! [qt-version-check]
+#include <QtGlobal>
+
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 0, 0))
+#include <QtWidgets>
+#else
+#include <QtGui>
+#endif
+//! [qt-version-check]

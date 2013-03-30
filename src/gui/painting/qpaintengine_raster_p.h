@@ -231,8 +231,8 @@ public:
 
     QPoint coordinateOffset() const;
 
-    bool supportsTransformations(QFontEngine *fontEngine) const;
-    bool supportsTransformations(QFontEngine *fontEngine, const QTransform &m) const;
+    bool requiresPretransformedGlyphPositions(QFontEngine *fontEngine, const QTransform &m) const;
+    bool shouldDrawCachedGlyphs(QFontEngine *fontEngine, const QTransform &m) const;
 
 protected:
     QRasterPaintEngine(QRasterPaintEnginePrivate &d, QPaintDevice *);
@@ -323,6 +323,7 @@ public:
 #endif
 
     QRect deviceRect;
+    QRect deviceRectUnclipped;
 
     QStroker basicStroker;
     QScopedPointer<QDashStroker> dashStroker;

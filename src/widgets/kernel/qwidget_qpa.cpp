@@ -3,7 +3,7 @@
 ** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
@@ -109,7 +109,10 @@ void QWidgetPrivate::create_sys(WId window, bool initializeWindow, bool destroyO
 
     win->setFlags(data.window_flags);
     fixPosIncludesFrame();
-    win->setGeometry(q->geometry());
+    if (q->testAttribute(Qt::WA_Moved))
+        win->setGeometry(q->geometry());
+    else
+        win->resize(q->size());
     win->setScreen(QGuiApplication::screens().value(topData()->screenIndex, 0));
 
     if (q->testAttribute(Qt::WA_TranslucentBackground)) {
@@ -466,19 +469,6 @@ void QWidget::activateWindow()
         wnd->requestActivate();
 }
 
-// Position top level windows at the center, avoid showing
-// Windows at the default 0,0 position excluding the frame.
-static inline QRect positionTopLevelWindow(QRect geometry, const QScreen *screen)
-{
-    if (screen && geometry.x() == 0 && geometry.y() == 0) {
-       const QRect availableGeometry = screen->availableGeometry();
-        if (availableGeometry.width() > geometry.width()
-            && availableGeometry.height() > geometry.height())
-            geometry.moveCenter(availableGeometry.center());
-    }
-    return geometry;
-}
-
 // move() was invoked with Qt::WA_WState_Created not set (frame geometry
 // unknown), that is, crect has a position including the frame.
 // If we can determine the frame strut, fix that and clear the flag.
@@ -529,16 +519,16 @@ void QWidgetPrivate::show_sys()
         if (q->isWindow())
             fixPosIncludesFrame();
         QRect geomRect = q->geometry();
-        if (q->isWindow()) {
-            if (!q->testAttribute(Qt::WA_Moved))
-                geomRect = positionTopLevelWindow(geomRect, window->screen());
-        } else {
+        if (!q->isWindow()) {
             QPoint topLeftOfWindow = q->mapTo(q->nativeParentWidget(),QPoint());
             geomRect.moveTopLeft(topLeftOfWindow);
         }
         const QRect windowRect = window->geometry();
         if (windowRect != geomRect) {
-            window->setGeometry(geomRect);
+            if (q->testAttribute(Qt::WA_Moved))
+                window->setGeometry(geomRect);
+            else
+                window->resize(geomRect.size());
         }
 
         if (QBackingStore *store = q->backingStore()) {
@@ -887,7 +877,12 @@ void QWidgetPrivate::createTLSysExtra()
             extra->topextra->window->setMinimumSize(QSize(extra->minw, extra->minh));
         if (extra->maxw != QWIDGETSIZE_MAX || extra->maxh != QWIDGETSIZE_MAX)
             extra->topextra->window->setMaximumSize(QSize(extra->maxw, extra->maxh));
+#ifdef Q_OS_WIN
+        if (q->inherits("QTipLabel") || q->inherits("QAlphaWidget"))
+            extra->topextra->window->setProperty("_q_windowsDropShadow", QVariant(true));
+#endif
     }
+
 }
 
 void QWidgetPrivate::deleteTLSysExtra()
@@ -999,6 +994,12 @@ static inline void applyCursor(QWidget *w, QCursor c)
         window->setCursor(c);
 }
 
+static inline void unsetCursor(QWidget *w)
+{
+    if (QWindow *window = w->windowHandle())
+        window->unsetCursor();
+}
+
 void qt_qpa_set_cursor(QWidget *w, bool force)
 {
     if (!w->testAttribute(Qt::WA_WState_Created))
@@ -1032,11 +1033,11 @@ void qt_qpa_set_cursor(QWidget *w, bool force)
         else
             // Enforce the windows behavior of clearing the cursor on
             // disabled widgets.
-            applyCursor(nativeParent, Qt::ArrowCursor);
+            unsetCursor(nativeParent);
     } else {
-        applyCursor(nativeParent, Qt::ArrowCursor);
+        unsetCursor(nativeParent);
     }
 }
-#endif //QT_NO_CURSOR 
+#endif //QT_NO_CURSOR
 
 QT_END_NAMESPACE

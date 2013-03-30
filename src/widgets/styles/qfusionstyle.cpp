@@ -3,7 +3,7 @@
 ** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
@@ -1086,7 +1086,7 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
     case CE_ToolBar:
         if (const QStyleOptionToolBar *toolBar = qstyleoption_cast<const QStyleOptionToolBar *>(option)) {
             // Reserve the beveled appearance only for mainwindow toolbars
-            if (!(widget && qobject_cast<const QMainWindow*> (widget->parentWidget())))
+            if (widget && !(qobject_cast<const QMainWindow*> (widget->parentWidget())))
                 break;
 
             // Draws the light line above and the dark line below menu bars and
@@ -1768,12 +1768,10 @@ void QFusionStyle::drawControl(ControlElement element, const QStyleOption *optio
         painter->save();
     {
         painter->fillRect(rect, option->palette.window());
-        if (widget && qobject_cast<const QMainWindow *>(widget->parentWidget())) {
-            QColor shadow = mergedColors(option->palette.background().color().darker(120),
-                                         outline.lighter(140), 60);
-            painter->setPen(QPen(shadow));
-            painter->drawLine(option->rect.bottomLeft(), option->rect.bottomRight());
-        }
+        QColor shadow = mergedColors(option->palette.background().color().darker(120),
+                                     outline.lighter(140), 60);
+        painter->setPen(QPen(shadow));
+        painter->drawLine(option->rect.bottomLeft(), option->rect.bottomRight());
     }
         painter->restore();
         break;
@@ -3475,6 +3473,7 @@ int QFusionStyle::styleHint(StyleHint hint, const QStyleOption *option, const QW
     case SH_ItemView_ChangeHighlightOnFocus:
     case SH_MenuBar_MouseTracking:
     case SH_Menu_MouseTracking:
+    case SH_Menu_SupportsSections:
         return 1;
 
     case SH_ToolBox_SelectedPageTitleBold:

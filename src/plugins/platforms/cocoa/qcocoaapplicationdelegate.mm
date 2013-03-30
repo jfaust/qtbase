@@ -145,8 +145,9 @@ static void cleanupCocoaApplicationDelegate()
     dockMenu = newMenu;
 }
 
-- (NSMenu *)applicationDockMenu
+- (NSMenu *)applicationDockMenu:(NSApplication *)sender
 {
+    Q_UNUSED(sender);
     return [[dockMenu retain] autorelease];
 }
 
@@ -202,6 +203,13 @@ static void cleanupCocoaApplicationDelegate()
     if ([self canQuit]) {
         if (!startedQuit) {
             startedQuit = true;
+            // Close open windows. This is done in order to deliver de-expose
+            // events while the event loop is still running.
+            const QWindowList topLevels = QGuiApplication::topLevelWindows();
+            for (int i = 0; i < topLevels.size(); ++i) {
+                topLevels.at(i)->close();
+            }
+
             QGuiApplication::exit(0);
             startedQuit = false;
         }

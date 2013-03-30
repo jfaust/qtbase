@@ -47,8 +47,6 @@
 #include <private/qpaintengine_raster_p.h>
 #include <qpen.h>
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -85,8 +83,9 @@ public:
         HorizontalMask = 0xc
     };
 
-    QCosmeticStroker(QRasterPaintEngineState *s, const QRect &dr)
+    QCosmeticStroker(QRasterPaintEngineState *s, const QRect &dr, const QRect &dr_unclipped)
         : state(s),
+          deviceRect(dr_unclipped),
           clip(dr),
           pattern(0),
           reversePattern(0),
@@ -110,6 +109,7 @@ public:
 
 
     QRasterPaintEngineState *state;
+    QRect deviceRect;
     QRect clip;
     // clip bounds in real
     qreal xmin, xmax;
@@ -154,7 +154,5 @@ public:
 };
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QCOSMETICLINE_H

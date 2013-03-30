@@ -109,10 +109,18 @@ QPlatformNativeInterface::NativeResourceForIntegrationFunction QCocoaNativeInter
         return NativeResourceForIntegrationFunction(QCocoaNativeInterface::registerDraggedTypes);
     if (resource.toLower() == "setdockmenu")
         return NativeResourceForIntegrationFunction(QCocoaNativeInterface::setDockMenu);
+    if (resource.toLower() == "qmenutonsmenu")
+        return NativeResourceForIntegrationFunction(QCocoaNativeInterface::qMenuToNSMenu);
+    if (resource.toLower() == "qmenubartonsmenu")
+        return NativeResourceForIntegrationFunction(QCocoaNativeInterface::qMenuBarToNSMenu);
     if (resource.toLower() == "qimagetocgimage")
         return NativeResourceForIntegrationFunction(QCocoaNativeInterface::qImageToCGImage);
     if (resource.toLower() == "cgimagetoqimage")
         return NativeResourceForIntegrationFunction(QCocoaNativeInterface::cgImageToQImage);
+    if (resource.toLower() == "setwindowcontentview")
+        return NativeResourceForIntegrationFunction(QCocoaNativeInterface::setWindowContentView);
+    if (resource.toLower() == "registertouchwindow")
+        return NativeResourceForIntegrationFunction(QCocoaNativeInterface::registerTouchWindow);
 
     return 0;
 }
@@ -184,8 +192,21 @@ void QCocoaNativeInterface::setDockMenu(QPlatformMenu *platformMenu)
 {
     QCocoaMenu *cocoaPlatformMenu = static_cast<QCocoaMenu *>(platformMenu);
     NSMenu *menu = cocoaPlatformMenu->nsMenu();
-    // setDockMenu seems to be undocumented, but this is what Qt 4 did.
-    [NSApp setDockMenu: menu];
+    [NSApp QT_MANGLE_NAMESPACE(qt_setDockMenu): menu];
+}
+
+void *QCocoaNativeInterface::qMenuToNSMenu(QPlatformMenu *platformMenu)
+{
+    QCocoaMenu *cocoaPlatformMenu = static_cast<QCocoaMenu *>(platformMenu);
+    NSMenu *menu = cocoaPlatformMenu->nsMenu();
+    return reinterpret_cast<void *>(menu);
+}
+
+void *QCocoaNativeInterface::qMenuBarToNSMenu(QPlatformMenuBar *platformMenuBar)
+{
+    QCocoaMenuBar *cocoaPlatformMenuBar = static_cast<QCocoaMenuBar *>(platformMenuBar);
+    NSMenu *menu = cocoaPlatformMenuBar->nsMenu();
+    return reinterpret_cast<void *>(menu);
 }
 
 CGImageRef QCocoaNativeInterface::qImageToCGImage(const QImage &image)
@@ -198,5 +219,17 @@ QImage QCocoaNativeInterface::cgImageToQImage(CGImageRef image)
     return qt_mac_toQImage(image);
 }
 
+void QCocoaNativeInterface::setWindowContentView(QPlatformWindow *window, void *contentView)
+{
+    QCocoaWindow *cocoaPlatformWindow = static_cast<QCocoaWindow *>(window);
+    cocoaPlatformWindow->setContentView(reinterpret_cast<NSView *>(contentView));
+}
+
+void QCocoaNativeInterface::registerTouchWindow(QWindow *window,  bool enable)
+{
+    QCocoaWindow *cocoaWindow = static_cast<QCocoaWindow *>(window->handle());
+    if (cocoaWindow)
+        cocoaWindow->registerTouch(enable);
+}
 
 QT_END_NAMESPACE

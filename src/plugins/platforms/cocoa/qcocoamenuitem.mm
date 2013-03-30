@@ -195,7 +195,7 @@ NSMenuItem *QCocoaMenuItem::sync()
         QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *loader = getMenuLoader();
         switch (m_role) {
         case ApplicationSpecificRole:
-            mergeItem = [loader appSpecificMenuItem];
+            mergeItem = [loader appSpecificMenuItem:reinterpret_cast<NSInteger>(this)];
             break;
         case AboutRole:
             mergeItem = [loader aboutMenuItem];
@@ -315,9 +315,12 @@ NSMenuItem *QCocoaMenuItem::sync()
     return m_native;
 }
 
+QT_BEGIN_NAMESPACE
+extern QString qt_mac_applicationmenu_string(int type);
+QT_END_NAMESPACE
+
 QString QCocoaMenuItem::mergeText()
 {
-    extern QString qt_mac_applicationmenu_string(int type);
     QT_MANGLE_NAMESPACE(QCocoaMenuLoader) *loader = getMenuLoader();
     if (m_native == [loader aboutMenuItem]) {
         return qt_mac_applicationmenu_string(6).arg(qt_mac_applicationName());

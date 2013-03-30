@@ -103,6 +103,10 @@ void tst_QToolTip::task183679()
     QFETCH(Qt::Key, key);
     QFETCH(bool, visible);
 
+#ifdef Q_OS_MAC
+    QSKIP("This test fails in the CI system, QTBUG-30040");
+#endif
+
     Widget_task183679 widget;
     widget.show();
     QApplication::setActiveWindow(&widget);
@@ -128,7 +132,7 @@ void tst_QToolTip::whatsThis()
 {
     qApp->setStyleSheet( "QWidget { font-size: 72px; }" );
     QWhatsThis::showText(QPoint(0,0), "THis is text");
-    QTest::qWait(400);	
+    QTest::qWait(400);
     QWidget *whatsthis = 0;
     foreach (QWidget *widget, QApplication::topLevelWidgets()) {
         if (widget->inherits("QWhatsThat")) {

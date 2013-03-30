@@ -42,7 +42,7 @@
 
 #include <QtTest/QtTest>
 #include <math.h>
-#include <qglobal.h>
+#include <qdebug.h>
 #include <qdir.h>
 #include <qfileinfo.h>
 #include <QScopedArrayPointer>
@@ -144,6 +144,9 @@ private slots:
 
     void measurementSystems();
     void QTBUG_26035_positivesign();
+
+    void textDirection_data();
+    void textDirection();
 
 private:
     QString m_decimal, m_thousand, m_sdate, m_ldate, m_time;
@@ -712,12 +715,23 @@ void tst_QLocale::double_conversion()
     QFETCH(QString, num_str);
     QFETCH(bool, good);
     QFETCH(double, num);
+    QStringRef num_strRef = num_str.leftRef(-1);
 
     QLocale locale(locale_name);
     QCOMPARE(locale.name(), locale_name);
 
     bool ok;
     double d = locale.toDouble(num_str, &ok);
+    QCOMPARE(ok, good);
+
+    if (ok) {
+        double diff = d - num;
+        if (diff < 0)
+            diff = -diff;
+        QVERIFY(diff <= MY_DOUBLE_EPSILON);
+    }
+
+    d = locale.toDouble(num_strRef, &ok);
     QCOMPARE(ok, good);
 
     if (ok) {
@@ -787,6 +801,7 @@ void tst_QLocale::long_long_conversion()
     QFETCH(QString, num_str);
     QFETCH(bool, good);
     QFETCH(qlonglong, num);
+    QStringRef num_strRef = num_str.leftRef(-1);
 
     QLocale locale(locale_name);
     QCOMPARE(locale.name(), locale_name);
@@ -795,9 +810,14 @@ void tst_QLocale::long_long_conversion()
     qlonglong l = locale.toLongLong(num_str, &ok);
     QCOMPARE(ok, good);
 
-    if (ok) {
+    if (ok)
         QCOMPARE(l, num);
-    }
+
+    l = locale.toLongLong(num_strRef, &ok);
+    QCOMPARE(ok, good);
+
+    if (ok)
+        QCOMPARE(l, num);
 }
 
 void tst_QLocale::long_long_conversion_extra()
@@ -1281,7 +1301,7 @@ static QString getWinLocaleInfo(LCTYPE type)
     int cnt = GetLocaleInfo(id, type, 0, 0) * 2;
 
     if (cnt == 0) {
-        qWarning("QLocale: empty windows locale info (%d)", type);
+        qWarning().nospace() << "QLocale: empty windows locale info (" <<  type << ')';
         return QString();
     }
     cnt /= sizeof(wchar_t);
@@ -1289,7 +1309,7 @@ static QString getWinLocaleInfo(LCTYPE type)
     cnt = GetLocaleInfo(id, type, buf.data(), cnt);
 
     if (cnt == 0) {
-        qWarning("QLocale: empty windows locale info (%d)", type);
+        qWarning().nospace() << "QLocale: empty windows locale info (" << type << ')';
         return QString();
     }
     return QString::fromWCharArray(buf.data());
@@ -1680,6 +1700,9 @@ void tst_QLocale::dateFormat()
 
     const QLocale ja("ja_JP");
     QCOMPARE(ja.dateFormat(QLocale::ShortFormat), QLatin1String("yyyy/MM/dd"));
+
+    const QLocale ir("ga_IE");
+    QCOMPARE(ir.dateFormat(QLocale::ShortFormat), QLatin1String("dd/MM/yyyy"));
 }
 
 void tst_QLocale::timeFormat()
@@ -1937,6 +1960,45 @@ void tst_QLocale::QTBUG_26035_positivesign()
     ok = false;
     QCOMPARE(locale.toLongLong(QString("+100,000,000"), &ok), (qlonglong)100000000);
     QVERIFY(ok);
+}
+
+void tst_QLocale::textDirection_data()
+{
+    QTest::addColumn<int>("language");
+    QTest::addColumn<int>("script");
+    QTest::addColumn<bool>("rightToLeft");
+
+    for (int language = QLocale::C; language <= QLocale::LastLanguage; ++language) {
+        bool rightToLeft = false;
+        switch (language) {
+        case QLocale::Arabic:
+        case QLocale::Hebrew:
+        case QLocale::Kashmiri:
+        case QLocale::Persian:
+        case QLocale::Pashto:
+        case QLocale::Urdu:
+        case QLocale::Syriac:
+        case QLocale::Divehi:
+            rightToLeft = QLocale(QLocale::Language(language)).language() == QLocale::Language(language); // false if there is no locale data for language
+            break;
+        default:
+            break;
+        }
+        QString testName = QLocalePrivate::languageToCode(QLocale::Language(language));
+        QTest::newRow(testName.toLatin1().constData()) << language << int(QLocale::AnyScript) << rightToLeft;
+    }
+    QTest::newRow("pa_Arab") << int(QLocale::Punjabi) << int(QLocale::ArabicScript) << true;
+    QTest::newRow("uz_Arab") << int(QLocale::Uzbek) << int(QLocale::ArabicScript) << true;
+}
+
+void tst_QLocale::textDirection()
+{
+    QFETCH(int, language);
+    QFETCH(int, script);
+    QFETCH(bool, rightToLeft);
+
+    QLocale locale(QLocale::Language(language), QLocale::Script(script), QLocale::AnyCountry);
+    QCOMPARE(locale.textDirection() == Qt::RightToLeft, rightToLeft);
 }
 
 QTEST_MAIN(tst_QLocale)

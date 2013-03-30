@@ -1054,20 +1054,20 @@ void QRasterPaintEnginePrivate::drawImage(const QPointF &pt,
 
 void QRasterPaintEnginePrivate::systemStateChanged()
 {
-    QRect clipRect(0, 0,
+    deviceRectUnclipped = QRect(0, 0,
             qMin(QT_RASTER_COORD_LIMIT, device->width()),
             qMin(QT_RASTER_COORD_LIMIT, device->height()));
 
     if (!systemClip.isEmpty()) {
-        QRegion clippedDeviceRgn = systemClip & clipRect;
+        QRegion clippedDeviceRgn = systemClip & deviceRectUnclipped;
         deviceRect = clippedDeviceRgn.boundingRect();
         baseClip->setClipRegion(clippedDeviceRgn);
     } else {
-        deviceRect = clipRect;
+        deviceRect = deviceRectUnclipped;
         baseClip->setClipRect(deviceRect);
     }
 #ifdef QT_DEBUG_DRAW
-    qDebug() << "systemStateChanged" << this << "deviceRect" << deviceRect << clipRect << systemClip;
+    qDebug() << "systemStateChanged" << this << "deviceRect" << deviceRect << deviceRectUnclipped << systemClip;
 #endif
 
     exDeviceRect = deviceRect;
@@ -1529,7 +1529,7 @@ void QRasterPaintEngine::drawRects(const QRect *rects, int rectCount)
     if (s->penData.blend) {
         QRectVectorPath path;
         if (s->flags.fast_pen) {
-            QCosmeticStroker stroker(s, d->deviceRect);
+            QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
             stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
             for (int i = 0; i < rectCount; ++i) {
                 path.set(rects[i]);
@@ -1576,7 +1576,7 @@ void QRasterPaintEngine::drawRects(const QRectF *rects, int rectCount)
         if (s->penData.blend) {
             QRectVectorPath path;
             if (s->flags.fast_pen) {
-                QCosmeticStroker stroker(s, d->deviceRect);
+                QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
                 stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
                 for (int i = 0; i < rectCount; ++i) {
                     path.set(rects[i]);
@@ -1610,7 +1610,7 @@ void QRasterPaintEngine::stroke(const QVectorPath &path, const QPen &pen)
         return;
 
     if (s->flags.fast_pen) {
-        QCosmeticStroker stroker(s, d->deviceRect);
+        QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
         stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
         stroker.drawPath(path);
     } else if (s->flags.non_complex_pen && path.shape() == QVectorPath::LinesHint) {
@@ -1953,7 +1953,7 @@ void QRasterPaintEngine::drawPolygon(const QPointF *points, int pointCount, Poly
     if (s->penData.blend) {
         QVectorPath vp((qreal *) points, pointCount, 0, QVectorPath::polygonFlags(mode));
         if (s->flags.fast_pen) {
-            QCosmeticStroker stroker(s, d->deviceRect);
+            QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
             stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
             stroker.drawPath(vp);
         } else {
@@ -2018,7 +2018,7 @@ void QRasterPaintEngine::drawPolygon(const QPoint *points, int pointCount, Polyg
         QVectorPath vp((qreal *) fpoints.data(), pointCount, 0, QVectorPath::polygonFlags(mode));
 
         if (s->flags.fast_pen) {
-            QCosmeticStroker stroker(s, d->deviceRect);
+            QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
             stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
             stroker.drawPath(vp);
         } else {
@@ -2858,7 +2858,19 @@ bool QRasterPaintEngine::drawCachedGlyphs(int numGlyphs, const glyph_t *glyphs,
             //        x, y,
             //        positions[i].x.toInt(), positions[i].y.toInt());
 
-            alphaPenBlt(bits + ((c.x << leftShift) >> rightShift) + c.y * bpl, bpl, depth, x, y, c.w, c.h);
+            const uchar *glyphBits = bits + ((c.x << leftShift) >> rightShift) + c.y * bpl;
+
+            if (glyphType == QFontEngineGlyphCache::Raster_ARGB) {
+                // The current state transform has already been applied to the positions,
+                // so we prevent drawImage() from re-applying the transform by clearing
+                // the state for the duration of the call.
+                QTransform originalTransform = s->matrix;
+                s->matrix = QTransform();
+                drawImage(QPoint(x, y), QImage(glyphBits, c.w, c.h, bpl, image.format()));
+                s->matrix = originalTransform;
+            } else {
+                alphaPenBlt(glyphBits, bpl, depth, x, y, c.w, c.h);
+            }
         }
     }
     return true;
@@ -3011,13 +3023,15 @@ void QRasterPaintEngine::drawStaticTextItem(QStaticTextItem *textItem)
     ensurePen();
     ensureRasterState();
 
+    QTransform matrix = state()->matrix;
+
     QFontEngine *fontEngine = textItem->fontEngine();
-    if (!supportsTransformations(fontEngine)) {
+    if (shouldDrawCachedGlyphs(fontEngine, matrix)) {
         drawCachedGlyphs(textItem->numGlyphs, textItem->glyphs, textItem->glyphPositions,
                          fontEngine);
-    } else if (state()->matrix.type() < QTransform::TxProject) {
+    } else if (matrix.type() < QTransform::TxProject) {
         bool invertible;
-        QTransform invMat = state()->matrix.inverted(&invertible);
+        QTransform invMat = matrix.inverted(&invertible);
         if (!invertible)
             return;
 
@@ -3056,7 +3070,7 @@ void QRasterPaintEngine::drawTextItem(const QPointF &p, const QTextItem &textIte
     QRasterPaintEngineState *s = state();
     QTransform matrix = s->matrix;
 
-    if (!supportsTransformations(ti.fontEngine)) {
+    if (shouldDrawCachedGlyphs(ti.fontEngine, matrix)) {
         QVarLengthArray<QFixedPoint> positions;
         QVarLengthArray<glyph_t> glyphs;
 
@@ -3112,7 +3126,7 @@ void QRasterPaintEngine::drawPoints(const QPointF *points, int pointCount)
         return;
     }
 
-    QCosmeticStroker stroker(s, d->deviceRect);
+    QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
     stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
     stroker.drawPoints(points, pointCount);
 }
@@ -3132,7 +3146,7 @@ void QRasterPaintEngine::drawPoints(const QPoint *points, int pointCount)
         return;
     }
 
-    QCosmeticStroker stroker(s, d->deviceRect);
+    QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
     stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
     stroker.drawPoints(points, pointCount);
 }
@@ -3153,7 +3167,7 @@ void QRasterPaintEngine::drawLines(const QLine *lines, int lineCount)
         return;
 
     if (s->flags.fast_pen) {
-        QCosmeticStroker stroker(s, d->deviceRect);
+        QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
         stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
         for (int i=0; i<lineCount; ++i) {
             const QLine &l = lines[i];
@@ -3225,7 +3239,7 @@ void QRasterPaintEngine::drawLines(const QLineF *lines, int lineCount)
     if (!s->penData.blend)
         return;
     if (s->flags.fast_pen) {
-        QCosmeticStroker stroker(s, d->deviceRect);
+        QCosmeticStroker stroker(s, d->deviceRect, d->deviceRectUnclipped);
         stroker.setLegacyRoundingEnabled(s->flags.legacy_rounding);
         for (int i=0; i<lineCount; ++i) {
             QLineF line = lines[i];
@@ -3300,21 +3314,25 @@ void QRasterPaintEngine::releaseDC(HDC) const
 /*!
     \internal
 */
-bool QRasterPaintEngine::supportsTransformations(QFontEngine *fontEngine) const
+bool QRasterPaintEngine::requiresPretransformedGlyphPositions(QFontEngine *fontEngine, const QTransform &m) const
 {
-    const QTransform &m = state()->matrix;
-    return supportsTransformations(fontEngine, m);
-}
-
-/*!
-    \internal
-*/
-bool QRasterPaintEngine::supportsTransformations(QFontEngine *fontEngine, const QTransform &m) const
-{
-    if (fontEngine->supportsTransformations(m))
+    // Cached glyphs always require pretransformed positions
+    if (shouldDrawCachedGlyphs(fontEngine, m))
         return true;
 
-    return !shouldDrawCachedGlyphs(fontEngine, m);
+    // Otherwise let the base-class decide based on the transform
+    return QPaintEngineEx::requiresPretransformedGlyphPositions(fontEngine, m);
+}
+
+bool QRasterPaintEngine::shouldDrawCachedGlyphs(QFontEngine *fontEngine, const QTransform &m) const
+{
+    // The font engine might not support filling the glyph cache
+    // with the given transform applied, in which case we need to
+    // fall back to the QPainterPath code-path.
+    if (!fontEngine->supportsTransformation(m))
+        return false;
+
+    return QPaintEngineEx::shouldDrawCachedGlyphs(fontEngine, m);
 }
 
 /*!

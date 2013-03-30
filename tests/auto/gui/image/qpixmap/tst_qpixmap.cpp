@@ -114,6 +114,7 @@ private slots:
 
     void convertFromImageNoDetach();
     void convertFromImageDetach();
+    void convertFromImageCacheKey();
 
 #if defined(Q_OS_WIN)
     void toWinHBITMAP_data();
@@ -167,6 +168,8 @@ private slots:
 
     void scaled_QTBUG19157();
     void detachOnLoad_QTBUG29639();
+
+    void copyOnNonAlignedBoundary();
 };
 
 static bool lenientCompare(const QPixmap &actual, const QPixmap &expected)
@@ -778,6 +781,28 @@ void tst_QPixmap::convertFromImageDetach()
     img.fill(1);
     p = QPixmap::fromImage(img);
     QVERIFY(copy.isDetached());
+}
+
+void tst_QPixmap::convertFromImageCacheKey()
+{
+    QPixmap randomPixmap(10, 10);
+    if (randomPixmap.handle()->classId() != QPlatformPixmap::RasterClass)
+        QSKIP("Test only valid for raster pixmaps");
+
+    //first get the screen format
+    QImage::Format screenFormat = randomPixmap.toImage().format();
+    QVERIFY(screenFormat != QImage::Format_Invalid);
+
+    QImage orig(100,100, screenFormat);
+    orig.fill(0);
+
+    QPixmap pix = QPixmap::fromImage(orig);
+    QImage copy = pix.toImage();
+
+    QVERIFY(copy.format() == screenFormat);
+
+    QCOMPARE(orig.cacheKey(), pix.cacheKey());
+    QCOMPARE(copy.cacheKey(), pix.cacheKey());
 }
 
 #if defined(Q_OS_WIN)
@@ -1501,6 +1526,14 @@ void tst_QPixmap::detachOnLoad_QTBUG29639()
     b.load(prefix + "/task31722_0/img1.png");
 
     QVERIFY(a.toImage() != b.toImage());
+}
+
+void tst_QPixmap::copyOnNonAlignedBoundary()
+{
+    QImage img(8, 2, QImage::Format_RGB16);
+
+    QPixmap pm1 = QPixmap::fromImage(img, Qt::NoFormatConversion);
+    QPixmap pm2 = pm1.copy(QRect(5, 0, 3, 2)); // When copying second line: 2 bytes too many are read which might cause an access violation.
 }
 
 QTEST_MAIN(tst_QPixmap)

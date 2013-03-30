@@ -96,7 +96,7 @@
 
 #include <errno.h>
 
-#ifdef QQNXINTEGRATION_DEBUG
+#if defined(QQNXINTEGRATION_DEBUG)
 #define qIntegrationDebug qDebug
 #else
 #define qIntegrationDebug QT_NO_QDEBUG_MACRO
@@ -495,6 +495,8 @@ void QQnxIntegration::createDisplay(screen_display_t display, bool isPrimary)
     QObject::connect(m_navigatorEventHandler, SIGNAL(rotationChanged(int)), screen, SLOT(setRotation(int)));
     QObject::connect(m_navigatorEventHandler, SIGNAL(windowGroupActivated(QByteArray)), screen, SLOT(activateWindowGroup(QByteArray)));
     QObject::connect(m_navigatorEventHandler, SIGNAL(windowGroupDeactivated(QByteArray)), screen, SLOT(deactivateWindowGroup(QByteArray)));
+    QObject::connect(m_navigatorEventHandler, SIGNAL(windowGroupStateChanged(QByteArray,Qt::WindowState)),
+            screen, SLOT(windowGroupStateChanged(QByteArray,Qt::WindowState)));
 }
 
 void QQnxIntegration::removeDisplay(QQnxScreen *screen)

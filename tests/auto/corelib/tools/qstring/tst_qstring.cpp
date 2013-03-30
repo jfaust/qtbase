@@ -156,6 +156,7 @@ private slots:
     void count();
     void lastIndexOf_data();
     void lastIndexOf();
+    void lastIndexOfInvalidRegex();
     void indexOf_data();
     void indexOf();
     void indexOf2_data();
@@ -195,6 +196,8 @@ private slots:
     void stringRef_local8Bit();
     void fromLatin1();
     void fromAscii();
+    void fromUcs4();
+    void toUcs4();
     void arg();
     void number();
     void arg_fillChar_data();
@@ -238,7 +241,7 @@ private slots:
 #ifdef QT_USE_ICU
     void toUpperLower_icu();
 #endif
-#if defined(QT_UNICODE_LITERAL) && (defined(Q_COMPILER_LAMBDA) || defined(Q_CC_GNU))
+#if !defined(QT_NO_UNICODE_LITERAL) && defined(Q_COMPILER_LAMBDA)
     void literals();
 #endif
     void eightBitLiterals_data();
@@ -633,6 +636,7 @@ void tst_QString::replace_regexp_data()
                                << QString("a9a8a7a6a5nmlkjii0hh0gg0ff0ee0dd0cc0bb0a");
     QTest::newRow("backref10") << QString("abc") << QString("((((((((((((((abc))))))))))))))")
                                << QString("\\0\\01\\011") << QString("\\0\\01\\011");
+    QTest::newRow("invalid") << QString("") << QString("invalid regex\\") << QString("") << QString("");
 }
 
 void tst_QString::utf8_data()
@@ -1003,10 +1007,12 @@ void tst_QString::sprintf()
     a.sprintf("%s%n%s", "hello", &n1, "goodbye");
     QCOMPARE(n1, 5);
     QCOMPARE(a, QString("hellogoodbye"));
+#ifndef Q_CC_MINGW // does not know %ll
     qlonglong n2;
     a.sprintf("%s%s%lln%s", "foo", "bar", &n2, "whiz");
     QCOMPARE((int)n2, 6);
     QCOMPARE(a, QString("foobarwhiz"));
+#endif
 }
 
 /*
@@ -1379,6 +1385,12 @@ void tst_QString::lastIndexOf()
     }
 }
 
+void tst_QString::lastIndexOfInvalidRegex()
+{
+    QTest::ignoreMessage(QtWarningMsg, "QString::lastIndexOf: invalid QRegularExpression object");
+    QCOMPARE(QString("").lastIndexOf(QRegularExpression("invalid regex\\"), 0), -1);
+}
+
 void tst_QString::count()
 {
     QString a;
@@ -1396,7 +1408,8 @@ void tst_QString::count()
     QCOMPARE(a.count(QRegExp("[G][HE]")),2);
     QCOMPARE(a.count(QRegularExpression("[FG][HI]")), 1);
     QCOMPARE(a.count(QRegularExpression("[G][HE]")), 2);
-
+    QTest::ignoreMessage(QtWarningMsg, "QString::count: invalid QRegularExpression object");
+    QCOMPARE(a.count(QRegularExpression("invalid regex\\")), 0);
 
     CREATE_REF(QLatin1String("FG"));
     QCOMPARE(a.count(ref),2);
@@ -1425,6 +1438,55 @@ void tst_QString::contains()
     QVERIFY(a.contains(QRegularExpression("[FG][HI]")));
     QVERIFY(a.contains(QRegularExpression("[G][HE]")));
 
+    {
+        QRegularExpressionMatch match;
+        QVERIFY(!match.hasMatch());
+
+        QVERIFY(a.contains(QRegularExpression("[FG][HI]"), &match));
+        QVERIFY(match.hasMatch());
+        QCOMPARE(match.capturedStart(), 6);
+        QCOMPARE(match.capturedEnd(), 8);
+        QCOMPARE(match.captured(), QStringLiteral("GH"));
+
+        QVERIFY(a.contains(QRegularExpression("[G][HE]"), &match));
+        QVERIFY(match.hasMatch());
+        QCOMPARE(match.capturedStart(), 6);
+        QCOMPARE(match.capturedEnd(), 8);
+        QCOMPARE(match.captured(), QStringLiteral("GH"));
+
+        QVERIFY(a.contains(QRegularExpression("[f](.*)[FG]"), &match));
+        QVERIFY(match.hasMatch());
+        QCOMPARE(match.capturedStart(), 10);
+        QCOMPARE(match.capturedEnd(), 15);
+        QCOMPARE(match.captured(), QString("fGEFG"));
+        QCOMPARE(match.capturedStart(1), 11);
+        QCOMPARE(match.capturedEnd(1), 14);
+        QCOMPARE(match.captured(1), QStringLiteral("GEF"));
+
+        QVERIFY(a.contains(QRegularExpression("[f](.*)[F]"), &match));
+        QVERIFY(match.hasMatch());
+        QCOMPARE(match.capturedStart(), 10);
+        QCOMPARE(match.capturedEnd(), 14);
+        QCOMPARE(match.captured(), QString("fGEF"));
+        QCOMPARE(match.capturedStart(1), 11);
+        QCOMPARE(match.capturedEnd(1), 13);
+        QCOMPARE(match.captured(1), QStringLiteral("GE"));
+
+        QVERIFY(!a.contains(QRegularExpression("ZZZ"), &match));
+        // doesn't match, but ensure match didn't change
+        QVERIFY(match.hasMatch());
+        QCOMPARE(match.capturedStart(), 10);
+        QCOMPARE(match.capturedEnd(), 14);
+        QCOMPARE(match.captured(), QStringLiteral("fGEF"));
+        QCOMPARE(match.capturedStart(1), 11);
+        QCOMPARE(match.capturedEnd(1), 13);
+        QCOMPARE(match.captured(1), QStringLiteral("GE"));
+
+        // don't crash with a null pointer
+        QVERIFY(a.contains(QRegularExpression("[FG][HI]"), 0));
+        QVERIFY(!a.contains(QRegularExpression("ZZZ"), 0));
+    }
+
     CREATE_REF(QLatin1String("FG"));
     QVERIFY(a.contains(ref));
     QVERIFY(a.contains(ref, Qt::CaseInsensitive));
@@ -1432,6 +1494,8 @@ void tst_QString::contains()
     QStringRef emptyRef(&a, 0, 0);
     QVERIFY(a.contains(emptyRef, Qt::CaseInsensitive));
 
+    QTest::ignoreMessage(QtWarningMsg, "QString::contains: invalid QRegularExpression object");
+    QVERIFY(!a.contains(QRegularExpression("invalid regex\\")));
 }
 
 
@@ -2342,7 +2406,10 @@ void tst_QString::replace_regexp()
     s2.replace( QRegExp(regexp), after );
     QTEST( s2, "result" );
     s2 = string;
-    s2.replace( QRegularExpression(regexp), after );
+    QRegularExpression regularExpression(regexp);
+    if (!regularExpression.isValid())
+        QTest::ignoreMessage(QtWarningMsg, "QString::replace: invalid QRegularExpression object");
+    s2.replace( regularExpression, after );
     QTEST( s2, "result" );
 }
 
@@ -3880,6 +3947,52 @@ void tst_QString::fromAscii()
     QVERIFY(a.size() == 5);
 }
 
+void tst_QString::fromUcs4()
+{
+    QString s;
+    s = QString::fromUcs4( 0 );
+    QVERIFY( s.isNull() );
+    QCOMPARE( s.size(), 0 );
+    s = QString::fromUcs4( 0, 0 );
+    QVERIFY( s.isNull() );
+    QCOMPARE( s.size(), 0 );
+    s = QString::fromUcs4( 0, 5 );
+    QVERIFY( s.isNull() );
+    QCOMPARE( s.size(), 0 );
+
+    uint nil = '\0';
+    s = QString::fromUcs4( &nil );
+    QVERIFY( !s.isNull() );
+    QCOMPARE( s.size(), 0 );
+    s = QString::fromUcs4( &nil, 0 );
+    QVERIFY( !s.isNull() );
+    QCOMPARE( s.size(), 0 );
+
+    uint bmp = 'a';
+    s = QString::fromUcs4( &bmp, 1 );
+    QVERIFY( !s.isNull() );
+    QCOMPARE( s.size(), 1 );
+
+    uint smp = 0x10000;
+    s = QString::fromUcs4( &smp, 1 );
+    QVERIFY( !s.isNull() );
+    QCOMPARE( s.size(), 2 );
+}
+
+void tst_QString::toUcs4()
+{
+    QString s;
+    QCOMPARE( s.toUcs4().size(), 0 );
+
+    QChar bmp = QLatin1Char('a');
+    s = QString(&bmp, 1);
+    QCOMPARE( s.toUcs4().size(), 1 );
+
+    QChar smp[] = { QChar::highSurrogate(0x10000), QChar::lowSurrogate(0x10000) };
+    s = QString(smp, 2);
+    QCOMPARE( s.toUcs4().size(), 1 );
+}
+
 void tst_QString::arg()
 {
 /*
@@ -5187,6 +5300,9 @@ void tst_QString::QCharRefDetaching() const
 
 void tst_QString::sprintfZU() const
 {
+#ifdef Q_CC_MINGW
+    QSKIP("MinGW does not support '%zu'.");
+#else
     {
         QString string;
         size_t s = 6;
@@ -5215,6 +5331,7 @@ void tst_QString::sprintfZU() const
         string.sprintf("%zu %s\n", s, "foo");
         QCOMPARE(string, QString::fromLatin1("6 foo\n"));
     }
+#endif // !Q_CC_MINGW
 }
 
 void tst_QString::repeatedSignature() const
@@ -5382,7 +5499,7 @@ void tst_QString::toUpperLower_icu()
 }
 #endif
 
-#if defined(QT_UNICODE_LITERAL) && (defined(Q_COMPILER_LAMBDA) || defined(Q_CC_GNU))
+#if !defined(QT_NO_UNICODE_LITERAL) && defined(Q_COMPILER_LAMBDA)
 // Only tested on c++0x compliant compiler or gcc
 void tst_QString::literals()
 {

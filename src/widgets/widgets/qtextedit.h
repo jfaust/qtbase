@@ -3,7 +3,7 @@
 ** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
@@ -51,8 +51,6 @@
 #ifndef QT_NO_TEXTEDIT
 
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 
@@ -86,7 +84,7 @@ class Q_WIDGETS_EXPORT QTextEdit : public QAbstractScrollArea
     Q_PROPERTY(bool acceptRichText READ acceptRichText WRITE setAcceptRichText)
     Q_PROPERTY(int cursorWidth READ cursorWidth WRITE setCursorWidth)
     Q_PROPERTY(Qt::TextInteractionFlags textInteractionFlags READ textInteractionFlags WRITE setTextInteractionFlags)
-    Q_PROPERTY(QTextDocument *document READ document WRITE setDocument)
+    Q_PROPERTY(QTextDocument *document READ document WRITE setDocument DESIGNABLE false)
 public:
     enum LineWrapMode {
         NoWrap,
@@ -313,8 +311,6 @@ private:
 Q_DECLARE_OPERATORS_FOR_FLAGS(QTextEdit::AutoFormatting)
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QT_NO_TEXTEDIT
 

@@ -3,7 +3,7 @@
 ** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
 ** Contact: http://www.qt-project.org/legal
 **
-** This file is part of the QtGui module of the Qt Toolkit.
+** This file is part of the QtWidgets module of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
@@ -595,6 +595,8 @@ extern void qRegisterWidgetsVariant();
 */
 void QApplicationPrivate::initialize()
 {
+    is_app_running = false; // Starting up.
+
     QWidgetPrivate::mapper = new QWidgetMapper;
     QWidgetPrivate::allWidgets = new QWidgetSet;
 
@@ -608,12 +610,8 @@ void QApplicationPrivate::initialize()
     qRegisterGuiStateMachine();
 #endif
 
-    is_app_running = true; // no longer starting up
-
-    Q_Q(QApplication);
-
     if (qgetenv("QT_USE_NATIVE_WINDOWS").toInt() > 0)
-        q->setAttribute(Qt::AA_NativeWindows);
+        QCoreApplication::setAttribute(Qt::AA_NativeWindows);
 
 #ifdef Q_OS_WINCE
 #ifdef QT_AUTO_MAXIMIZE_THRESHOLD
@@ -636,6 +634,8 @@ void QApplicationPrivate::initialize()
     if (QApplication::desktopSettingsAware())
         if (const QPlatformTheme *theme = QGuiApplicationPrivate::platformTheme())
             QApplicationPrivate::enabledAnimations = theme->themeHint(QPlatformTheme::UiEffects).toInt();
+
+    is_app_running = true; // no longer starting up
 }
 
 /*****************************************************************************
@@ -974,11 +974,7 @@ QStyle *QApplication::style()
         // Compile-time search for default style
         //
         QString style;
-#ifdef QT_BUILD_INTERNAL
         QString envStyle = QString::fromLocal8Bit(qgetenv("QT_STYLE_OVERRIDE"));
-#else
-        QString envStyle;
-#endif
         if (!QApplicationPrivate::styleOverride.isEmpty()) {
             style = QApplicationPrivate::styleOverride;
         } else if (!envStyle.isEmpty()) {
@@ -2017,7 +2013,8 @@ void QApplication::setActiveWindow(QWidget* act)
  * Returns 0 if a new focus widget could not be found.
  * Shared with QGraphicsProxyWidgetPrivate::findFocusChild()
 */
-QWidget *QApplicationPrivate::focusNextPrevChild_helper(QWidget *toplevel, bool next)
+QWidget *QApplicationPrivate::focusNextPrevChild_helper(QWidget *toplevel, bool next,
+                                                        bool *wrappingOccurred)
 {
     uint focus_flag = qt_tab_all_widgets() ? Qt::TabFocus : Qt::StrongFocus;
 
@@ -2027,18 +2024,29 @@ QWidget *QApplicationPrivate::focusNextPrevChild_helper(QWidget *toplevel, bool 
 
     QWidget *w = f;
     QWidget *test = f->d_func()->focus_next;
+    bool seenWindow = false;
+    bool focusWidgetAfterWindow = false;
     while (test && test != f) {
+        if (test->isWindow())
+            seenWindow = true;
+
         if ((test->focusPolicy() & focus_flag) == focus_flag
             && !(test->d_func()->extra && test->d_func()->extra->focus_proxy)
             && test->isVisibleTo(toplevel) && test->isEnabled()
             && !(w->windowType() == Qt::SubWindow && !w->isAncestorOf(test))
             && (toplevel->windowType() != Qt::SubWindow || toplevel->isAncestorOf(test))) {
             w = test;
+            if (seenWindow)
+                focusWidgetAfterWindow = true;
             if (next)
                 break;
         }
         test = test->d_func()->focus_next;
     }
+
+    if (wrappingOccurred != 0)
+        *wrappingOccurred = next ? focusWidgetAfterWindow : !focusWidgetAfterWindow;
+
     if (w == f) {
         if (qt_in_tab_key_event) {
             w->window()->setAttribute(Qt::WA_KeyboardFocusChange);
@@ -3366,6 +3374,34 @@ bool QApplication::notify(QObject *receiver, QEvent *e)
         break;
     }
 #endif // QT_NO_GESTURES
+#ifdef Q_OS_MAC
+    // Enable touch events on enter, disable on leave.
+    typedef void (*RegisterTouchWindowFn)(QWindow *,  bool);
+    case QEvent::Enter:
+        if (receiver->isWidgetType()) {
+            QWidget *w = static_cast<QWidget *>(receiver);
+            if (w->testAttribute(Qt::WA_AcceptTouchEvents)) {
+                RegisterTouchWindowFn registerTouchWindow = reinterpret_cast<RegisterTouchWindowFn>
+                        (platformNativeInterface()->nativeResourceFunctionForIntegration("registertouchwindow"));
+                if (registerTouchWindow)
+                    registerTouchWindow(w->window()->windowHandle(), true);
+            }
+        }
+        res = d->notify_helper(receiver, e);
+    break;
+    case QEvent::Leave:
+        if (receiver->isWidgetType()) {
+            QWidget *w = static_cast<QWidget *>(receiver);
+            if (w->testAttribute(Qt::WA_AcceptTouchEvents)) {
+                RegisterTouchWindowFn registerTouchWindow = reinterpret_cast<RegisterTouchWindowFn>
+                        (platformNativeInterface()->nativeResourceFunctionForIntegration("registertouchwindow"));
+                if (registerTouchWindow)
+                    registerTouchWindow(w->window()->windowHandle(), false);
+            }
+        }
+        res = d->notify_helper(receiver, e);
+    break;
+#endif
     default:
         res = d->notify_helper(receiver, e);
         break;
@@ -3567,8 +3603,8 @@ int QApplication::doubleClickInterval()
     \since 4.2
     \deprecated
 
-    Returns the current keyboard input direction. Replaced with QInputPanel::inputDirection()
-    \sa QInputPanel::inputDirection()
+    Returns the current keyboard input direction. Replaced with QInputMethod::inputDirection()
+    \sa QInputMethod::inputDirection()
 */
 
 /*!
@@ -3772,8 +3808,6 @@ private:
 
 bool QApplicationPrivate::translateTouchToMouse(QWidget *widget, QTouchEvent *event)
 {
-    Q_Q(QApplication);
-
     // Check if the platform wants synthesized mouse events.
     if (!QGuiApplicationPrivate::platformIntegration()->styleHint(QPlatformIntegration::SynthesizeMouseFromTouchEvents).toBool())
         return false;
@@ -3789,7 +3823,7 @@ bool QApplicationPrivate::translateTouchToMouse(QWidget *widget, QTouchEvent *ev
 
         const QPoint pos = widget->mapFromGlobal(p.screenPos().toPoint());
 
-        QMouseEvent mouseEvent(eventType, pos,
+        QMouseEvent mouseEvent(eventType, pos, p.screenPos().toPoint(),
                                Qt::LeftButton, Qt::LeftButton,
                                event->modifiers());
         mouseEvent.setAccepted(true);
@@ -3804,7 +3838,7 @@ bool QApplicationPrivate::translateTouchToMouse(QWidget *widget, QTouchEvent *ev
         // Note it has to be a spontaneous event if we want the focus management
         // and input method support to behave properly. Quite some of the code
         // related to those aspect check for the spontaneous flag.
-        const bool res = q->sendSpontaneousEvent(widget, &mouseEvent);
+        const bool res = QCoreApplication::sendSpontaneousEvent(widget, &mouseEvent);
         event->setAccepted(mouseEvent.isAccepted());
 
         if (mouseEvent.isAccepted())

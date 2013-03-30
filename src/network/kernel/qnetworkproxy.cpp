@@ -706,7 +706,7 @@ quint16 QNetworkProxy::port() const
     If a QAbstractSocket or QTcpSocket has the
     QNetworkProxy::DefaultProxy type, then the QNetworkProxy set with
     this function is used. If you want more flexibility in determining
-    which the proxy, use the QNetworkProxyFactory class.
+    which proxy is used, use the QNetworkProxyFactory class.
 
     Setting a default proxy value with this function will override the
     application proxy factory set with
@@ -1562,7 +1562,7 @@ void QNetworkProxyFactory::setApplicationProxyFactory(QNetworkProxyFactory *fact
     \li On Windows platforms, this function may take several seconds to
     execute depending on the configuration of the user's system.
 
-    \li On BlackBerry, only UrlRequest queries are supported. SOCKS is
+    \li On BlackBerry, only UrlRequest and TcpSocket queries are supported. SOCKS is
     not supported. The proxy credentials are only retrieved for the
     default configuration.
     \endlist

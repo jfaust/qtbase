@@ -93,11 +93,6 @@ static inline QDate fixedDate(int y, int m, int d)
     return result;
 }
 
-static inline qint64 floordiv(qint64 a, qint64 b)
-{
-    return (a - (a < 0 ? b-1 : 0)) / b;
-}
-
 static inline qint64 floordiv(qint64 a, int b)
 {
     return (a - (a < 0 ? b-1 : 0)) / b;
@@ -265,8 +260,7 @@ static QString fmtDateTime(const QString& f, const QTime* dt = 0, const QDate* d
     If the specified date is invalid, the date is not set and
     isValid() returns false.
 
-    \warning Years 0 to 99 are interpreted as is, i.e., years
-             0-99.
+    \warning Years 1 to 99 are interpreted as is. Year 0 is invalid.
 
     \sa isValid()
 */
@@ -549,8 +543,8 @@ int QDate::weekNumber(int *yearNumber) const
     \li 12 = "Dec"
     \endlist
 
-    The month names will be localized according to the system's locale
-    settings.
+    The month names will be localized according to the system's default
+    locale settings.
 
     Returns an empty string if the date is invalid.
 
@@ -596,8 +590,8 @@ QString QDate::shortMonthName(int month, QDate::MonthNameType type)
     \li 12 = "December"
     \endlist
 
-    The month names will be localized according to the system's locale
-    settings.
+    The month names will be localized according to the system's default
+    locale settings.
 
     Returns an empty string if the date is invalid.
 
@@ -638,8 +632,8 @@ QString QDate::longMonthName(int month, MonthNameType type)
     \li 7 = "Sun"
     \endlist
 
-    The day names will be localized according to the system's locale
-    settings.
+    The day names will be localized according to the system's default
+    locale settings.
 
     Returns an empty string if the date is invalid.
 
@@ -680,8 +674,8 @@ QString QDate::shortDayName(int weekday, MonthNameType type)
     \li 7 = "Sunday"
     \endlist
 
-    The day names will be localized according to the system's locale
-    settings.
+    The day names will be localized according to the system's default
+    locale settings.
 
     Returns an empty string if the date is invalid.
 
@@ -718,8 +712,8 @@ QString QDate::longDayName(int weekday, MonthNameType type)
     If the \a format is Qt::TextDate, the string is formatted in
     the default way. QDate::shortDayName() and QDate::shortMonthName()
     are used to generate the string, so the day and month names will
-    be localized names. An example of this formatting is
-    "Sat May 20 1995".
+    be localized names using the default locale from the system. An
+    example of this formatting is "Sat May 20 1995".
 
     If the \a format is Qt::ISODate, the string format corresponds
     to the ISO 8601 extended specification for representations of
@@ -1488,10 +1482,7 @@ int QTime::msec() const
 
     If \a format is Qt::ISODate, the string format corresponds to the
     ISO 8601 extended specification for representations of dates,
-    which is also HH:MM:SS. (However, contrary to ISO 8601, dates
-    before 15 October 1582 are handled as Julian dates, not Gregorian
-    dates. See \l{QDate G and J} {Use of Gregorian and Julian
-    Calendars}. This might change in a future version of Qt.)
+    which is also HH:MM:SS.
 
     If the \a format is Qt::SystemLocaleShortDate or
     Qt::SystemLocaleLongDate, the string format depends on the locale
@@ -1560,9 +1551,9 @@ QString QTime::toString(Qt::DateFormat format) const
     \row \li z \li the milliseconds without leading zeroes (0 to 999)
     \row \li zzz \li the milliseconds with leading zeroes (000 to 999)
     \row \li AP or A
-         \li use AM/PM display. \e AP will be replaced by either "AM" or "PM".
+         \li use AM/PM display. \e A/AP will be replaced by either "AM" or "PM".
     \row \li ap or a
-         \li use am/pm display. \e ap will be replaced by either "am" or "pm".
+         \li use am/pm display. \e a/ap will be replaced by either "am" or "pm".
     \row \li t \li the timezone (for example "CEST")
     \endtable
 
@@ -2409,9 +2400,9 @@ uint QDateTime::toTime_t() const
     (Qt::UTC). On systems that do not support time zones this function
     will behave as if local time were Qt::UTC.
 
-    Note that there are possible values for \a msecs that lie outside the
-    valid range of QDateTime, both negative and positive. The behavior of
-    this function is undefined for those values.
+    Note that passing the minimum of \c qint64
+    (\c{std::numeric_limits<qint64>::min()}) to \a msecs will result in
+    undefined behavior.
 
     \sa toMSecsSinceEpoch(), setTime_t()
 */
@@ -3759,8 +3750,7 @@ static bool hasUnquotedAP(const QString &f)
     for (int i=0; i<max; ++i) {
         if (f.at(i) == quote) {
             inquote = !inquote;
-        } else if (!inquote && f.at(i).toUpper() == QLatin1Char('A')
-            && i + 1 < max && f.at(i + 1).toUpper() == QLatin1Char('P')) {
+        } else if (!inquote && f.at(i).toUpper() == QLatin1Char('A')) {
             return true;
         }
     }
@@ -4015,7 +4005,7 @@ static QDateTimePrivate::Spec utcToLocal(QDate &date, QTime &time)
         time = QTime();
         return QDateTimePrivate::LocalUnknown;
     } else {
-        int deltaDays = fakeDate.daysTo(date);
+        qint64 deltaDays = fakeDate.daysTo(date);
         date = QDate(brokenDown->tm_year + 1900, brokenDown->tm_mon + 1, brokenDown->tm_mday);
         time = QTime(brokenDown->tm_hour, brokenDown->tm_min, brokenDown->tm_sec, time.msec());
         date = date.addDays(deltaDays);
@@ -4050,6 +4040,16 @@ static void localToUtc(QDate &date, QTime &time, int isdst)
     _tzset();
 #endif
     time_t secsSince1Jan1970UTC = mktime(&localTM);
+#ifdef Q_OS_QNX
+    //mktime sometimes fails on QNX. Following workaround converts the date and time then manually
+    if (secsSince1Jan1970UTC == (time_t)-1) {
+        QDateTime tempTime = QDateTime(date, time, Qt::UTC);;
+        tempTime = tempTime.addMSecs(timezone * 1000);
+        date = tempTime.date();
+        time = tempTime.time();
+        return;
+    }
+#endif
 #endif
     tm *brokenDown = 0;
 #if defined(Q_OS_WINCE)
@@ -4083,7 +4083,7 @@ static void localToUtc(QDate &date, QTime &time, int isdst)
         date = QDate(1970, 1, 1);
         time = QTime();
     } else {
-        int deltaDays = fakeDate.daysTo(date);
+        qint64 deltaDays = fakeDate.daysTo(date);
         date = QDate(brokenDown->tm_year + 1900, brokenDown->tm_mon + 1, brokenDown->tm_mday);
         time = QTime(brokenDown->tm_hour, brokenDown->tm_min, brokenDown->tm_sec, time.msec());
         date = date.addDays(deltaDays);
