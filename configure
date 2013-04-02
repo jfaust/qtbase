@@ -256,9 +256,10 @@ macSDKify()
                 # Prefix tool with toolchain path
                 var=$(echo "$line" | cut -d '=' -f 1)
                 val=$(echo "$line" | cut -d '=' -f 2-)
-                sdk_val=$(xcrun -sdk $sdk -find $(echo $val | cut -d ' ' -f 1))
-                val=$(echo $sdk_val $(echo $val | cut -s -d ' ' -f 2-))
+                #sdk_val=$(xcrun -sdk $sdk -find $(echo $val | cut -d ' ' -f 1))
+                #val=$(echo $sdk_val $(echo $val | cut -s -d ' ' -f 2-))
                 echo "$var=$val"
+                #echo "$line == $val" >&2
             ;;
             QMAKE_CFLAGS=*|QMAKE_CXXFLAGS=*|QMAKE_OBJECTIVE_CFLAGS=*)
                 echo "$line -isysroot $sysroot $version_min_flag"
