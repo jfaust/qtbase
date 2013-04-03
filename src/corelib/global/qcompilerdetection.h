@@ -575,7 +575,7 @@
 #    if __has_feature(cxx_reference_qualified_functions)
 #      define Q_COMPILER_REF_QUALIFIERS
 #    endif
-#    if __has_feature(cxx_rvalue_references)
+#    if __has_feature(cxx_rvalue_references) && defined(_LIBCPP_VERSION) // libstdc++ 4.2 does not have std::move
 #      define Q_COMPILER_RVALUE_REFS
 #    endif
 #    if __has_feature(cxx_static_assert)
@@ -596,7 +596,7 @@
 #    if __has_feature(cxx_unrestricted_unions)
 #      define Q_COMPILER_UNRESTRICTED_UNIONS
 #    endif
-#    if __has_feature(cxx_variadic_templates)
+#    if __has_feature(cxx_variadic_templates) && defined(_LIBCPP_VERSION) // libstdc++ 4.2 does not have std::forward
 #      define Q_COMPILER_VARIADIC_TEMPLATES
 #    endif
     /* Features that have no __has_feature() check */
