@@ -87,6 +87,7 @@ static QTouchDevice *touchDevice = 0;
         m_subscribesForGlobalFrameNotifications = false;
         currentCustomDragTypes = 0;
         m_sendUpAsRightButton = false;
+        m_mouseInView = false;
 
         if (!touchDevice) {
             touchDevice = new QTouchDevice;
